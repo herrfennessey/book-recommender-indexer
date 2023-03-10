@@ -6,9 +6,10 @@ from json import JSONDecodeError
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 from starlette.responses import Response
-from starlette.status import HTTP_200_OK
+from starlette.status import HTTP_200_OK, HTTP_422_UNPROCESSABLE_ENTITY, HTTP_500_INTERNAL_SERVER_ERROR
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, BookDataV1
+from src.clients.book_recommender_api_client import BookRecommenderApiClient, BookDataV1, \
+    get_book_recommender_api_client, BookRecommenderApiClientException, BookRecommenderApiServerException
 from src.routes.api_models import PubSubMessage
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 @router.post("/handle", tags=["books"], status_code=200)
 async def handle_pubsub_message(
         request: PubSubMessage,
-        client: BookRecommenderApiClient = Depends(BookRecommenderApiClient)
+        client: BookRecommenderApiClient = Depends(get_book_recommender_api_client)
 ):
     """
     Handle a pubsub POST call. We do not use the actual pubsub library, but instead receive the message
@@ -49,11 +50,20 @@ async def handle_pubsub_message(
         payload = base64.b64decode(request.message.data).decode("utf-8")
         json_payload = json.loads(payload)
         book_info = BookDataV1(**json_payload)
-        await client.create_book(book_info)
-    except ValidationError as e:
-        logging.error("Error converting payload into book object. Received: %s Error: %s", json_payload, e)
+
+        # We have a valid book, so let's send it to the book recommender API
+        try:
+            await client.create_book(book_info)
+        except BookRecommenderApiClientException as e:
+            logging.error("Book Recommender API thinks the payload was malformed %s - exception: %s", json_payload, e)
+        except BookRecommenderApiServerException as e:
+            logging.error("HTTP Exception occurred when calling Book Recommender API - error: %s", e)
+            return Response(status_code=HTTP_500_INTERNAL_SERVER_ERROR)
+
     except JSONDecodeError as _:
         logging.error("Payload was not in JSON - received %s", payload)
+    except ValidationError as e:
+        logging.error("Error converting payload into book object. Received: %s Error: %s", json_payload, e)
     except Exception as e:
         logging.error("Uncaught Exception while handling pubsub message. Error: %s", e)
 
