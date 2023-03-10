@@ -6,7 +6,7 @@ from json import JSONDecodeError
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 from starlette.responses import Response
-from starlette.status import HTTP_200_OK, HTTP_422_UNPROCESSABLE_ENTITY, HTTP_500_INTERNAL_SERVER_ERROR
+from starlette.status import HTTP_200_OK, HTTP_500_INTERNAL_SERVER_ERROR
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, BookDataV1, \
     get_book_recommender_api_client, BookRecommenderApiClientException, BookRecommenderApiServerException

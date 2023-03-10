@@ -91,6 +91,7 @@ async def test_uncaught_exception_from_user_info_client(httpx_mock, caplog: LogC
         "book_id: 1"
     )
 
+
 @pytest.fixture
 def assert_all_responses_were_requested() -> bool:
     return False

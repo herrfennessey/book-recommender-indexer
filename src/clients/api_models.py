@@ -83,4 +83,3 @@ class BookDataV1(BaseModel):
                 <= datetime.now().timestamp()
         ), "Parse date must be between Jan 1, 1900 and now"
         return parsed_ts
-
