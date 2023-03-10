@@ -1,0 +1,39 @@
+{
+  "book_id": 4,
+  "book_url": "/book/show/4",
+  "book_title": "Harry Potter and the Chamber of Secrets",
+  "author": "J.K. Rowling",
+  "author_url": "https://www.goodreads.com/author/show/1077326.J_K_Rowling",
+  "book_description": "abc 123",
+  "scrape_time": "2023-03-09",
+  "work_internal_id": "kca://work/amzn1.gr.work.v1.PjwTgn-_w5b0mY40RgNxdw",
+  "work_id": 6231171,
+  "publish_date": "1998-07-02",
+  "original_title": "Harry Potter and the Chamber of Secrets",
+  "num_ratings": 3554069,
+  "num_reviews": 70220,
+  "avg_rating": 4.43,
+  "rating_histogram": [
+    20480,
+    66639,
+    386448,
+    971920,
+    2108582
+  ],
+  "num_pages": 352,
+  "language": "English",
+  "asin": "0439554896",
+  "series": "Harry Potter",
+  "genres": [
+    "Magic",
+    "Science Fiction Fantasy",
+    "Middle Grade",
+    "Adventure",
+    "Childrens",
+    "Classics",
+    "Audiobook",
+    "Fantasy",
+    "Fiction",
+    "Young Adult"
+  ]
+}
