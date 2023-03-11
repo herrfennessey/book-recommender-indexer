@@ -6,14 +6,14 @@ from json import JSONDecodeError
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 from starlette.responses import Response
-from starlette.status import HTTP_200_OK, HTTP_500_INTERNAL_SERVER_ERROR
+from starlette.status import HTTP_200_OK
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
-    BookRecommenderApiClientException, BookRecommenderApiServerException
-from src.routes.pubsub_models import PubSubMessage, PubSubBookV1
+from src.clients.book_recommender_api_client import BookRecommenderApiClient, \
+    get_book_recommender_api_client
+from src.routes.pubsub_models import PubSubMessage, PubSubUserReviewV1
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/pubsub/books")
+router = APIRouter(prefix="/pubsub/user-reviews")
 
 """
 The message pubsub sends us roughly follows this schema - data is base 64 encoded
@@ -32,7 +32,7 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 """
 
 
-@router.post("/handle", tags=["books"], status_code=200)
+@router.post("/handle", tags=["user-reviews"], status_code=200)
 async def handle_pubsub_message(
         request: PubSubMessage,
         client: BookRecommenderApiClient = Depends(get_book_recommender_api_client)
@@ -49,23 +49,20 @@ async def handle_pubsub_message(
     try:
         payload = base64.b64decode(request.message.data).decode("utf-8")
         json_payload = json.loads(payload)
-        book_info = PubSubBookV1(**json_payload)
-
-        # We have a valid book, so let's send it to the book recommender API
-        try:
-            await client.create_book(book_info.dict())
-        except BookRecommenderApiClientException as e:
-            logging.error("Book Recommender API thinks the payload was malformed %s - exception: %s", json_payload, e)
-        except BookRecommenderApiServerException as e:
-            logging.error("HTTP Exception occurred when calling Book Recommender API - error: %s", e)
-            return Response(status_code=HTTP_500_INTERNAL_SERVER_ERROR)
-
+        user_review = PubSubUserReviewV1(**json_payload)
     except JSONDecodeError as _:
         logging.error("Payload was not in JSON - received %s", payload)
+        return Response(status_code=HTTP_200_OK)
     except ValidationError as e:
         logging.error("Error converting payload into book object. Received: %s Error: %s", json_payload, e)
+        return Response(status_code=HTTP_200_OK)
     except Exception as e:
         logging.error("Uncaught Exception while handling pubsub message. Error: %s", e)
+        return Response(status_code=HTTP_200_OK)
 
-    # We need to return 200 to pubsub, otherwise it will retry
+    books_read_by_user = await client.get_books_read_by_user(user_review.user_id)
+
+    if user_review.book_id in books_read_by_user:
+        logging.info("User %s has already read book %s - skipping", user_review.user_id, user_review.book_id)
+
     return Response(status_code=HTTP_200_OK)

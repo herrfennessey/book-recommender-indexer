@@ -1,11 +1,12 @@
 import json
+from typing import Dict, Any
 
 import httpx
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
 
-from src.clients.api_models import BookDataV1
+from src.clients.api_models import BookV1ApiRequest
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, BookRecommenderApiServerException, \
     BookRecommenderApiClientException
 from src.dependencies import Properties
@@ -156,16 +157,16 @@ def assert_all_responses_were_requested() -> bool:
     return False
 
 
-def _a_random_book() -> BookDataV1:
-    return BookDataV1(
-        work_internal_id="A Random Work Internal ID",
-        work_id=12345,
-        author="A Random Author",
-        author_url="A Random Author URL",
-        avg_rating=4.5,
-        rating_histogram=[1, 2, 3, 4, 5],
-        book_id=1,
-        book_title="A Random Book Title",
-        book_url="www.bookurl.com",
-        scrape_time="2022-09-01T00:00:00.000000",
-    )
+def _a_random_book() -> Dict[str, Any]:
+    return {
+        "work_internal_id": "A Random Work Internal ID",
+        "work_id": 12345,
+        "author": "A Random Author",
+        "author_url": "A Random Author URL",
+        "avg_rating": 4.5,
+        "rating_histogram": [1, 2, 3, 4, 5],
+        "book_id": 1,
+        "book_title": "A Random Book Title",
+        "book_url": "www.bookurl.com",
+        "scrape_time": "2022-09-01T00:00:00.000000",
+    }

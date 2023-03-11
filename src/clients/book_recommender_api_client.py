@@ -1,13 +1,13 @@
 import logging
 from functools import lru_cache
-from typing import List
+from typing import List, Any, Dict
 
 import httpx
 from asyncache import cached
-from cachetools import LRUCache, TTLCache
+from cachetools import TTLCache
 from fastapi import Depends
 
-from src.clients.api_models import BookDataV1
+from src.clients.api_models import BookV1ApiRequest
 from src.dependencies import Properties
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,9 @@ class BookRecommenderApiClient(object):
     def __init__(self, properties: Properties = Depends(get_properties)):
         self.base_url = properties.book_recommender_api_base_url
 
-    async def create_book(self, book: BookDataV1):
-        book_id = book.book_id
+    async def create_book(self, book_dict: Dict[str, Any]):
+        book_id = book_dict.get("book_id")
+        book = BookV1ApiRequest(**book_dict)
         url = f"{self.base_url}/books/{book_id}"
         try:
             response = httpx.put(url, data=book.json())
@@ -56,7 +57,7 @@ class BookRecommenderApiClient(object):
             if not response.is_error:
                 return response.json().get("book_ids", [])
             elif response.is_client_error:
-                logger.info("Received 4xx exception from server, assuming user {} does not exist. URL: {} ".format(
+                logger.info("Received 4xx exception from server, assuming user_id: {} does not exist. URL: {} ".format(
                     user_id, url))
                 return []
             elif response.is_server_error:
