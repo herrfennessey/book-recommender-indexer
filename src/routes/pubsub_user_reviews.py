@@ -11,6 +11,7 @@ from starlette.status import HTTP_200_OK
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, \
     get_book_recommender_api_client
 from src.routes.pubsub_models import PubSubMessage, PubSubUserReviewV1
+from src.services.user_review_service import get_user_review_service, UserReviewService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pubsub/user-reviews")
@@ -35,7 +36,7 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 @router.post("/handle", tags=["user-reviews"], status_code=200)
 async def handle_pubsub_message(
         request: PubSubMessage,
-        client: BookRecommenderApiClient = Depends(get_book_recommender_api_client)
+        user_review_service: UserReviewService = Depends(get_user_review_service)
 ):
     """
     Handle a pubsub POST call. We do not use the actual pubsub library, but instead receive the message
@@ -60,9 +61,5 @@ async def handle_pubsub_message(
         logging.error("Uncaught Exception while handling pubsub message. Error: %s", e)
         return Response(status_code=HTTP_200_OK)
 
-    books_read_by_user = await client.get_books_read_by_user(user_review.user_id)
+    user_review_service.process_pubsub_message(user_review)
 
-    if user_review.book_id in books_read_by_user:
-        logging.info("User %s has already read book %s - skipping", user_review.user_id, user_review.book_id)
-
-    return Response(status_code=HTTP_200_OK)

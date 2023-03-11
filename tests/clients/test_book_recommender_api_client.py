@@ -152,6 +152,65 @@ async def test_unhandled_exceptions_when_getting_books_read_throws_exception(htt
                                       "https://testurl/users/1/book-ids")
 
 
+@pytest.mark.asyncio
+async def test_successful_query_to_see_if_book_exists(httpx_mock):
+    # Given
+    httpx_mock.add_response(status_code=200, url="https://testurl/books/1")
+    client = BookRecommenderApiClient(properties=TEST_PROPERTIES)
+
+    # When
+    response = await client.does_book_exist(1)
+
+    # Then
+    assert_that(response).is_true()
+
+
+@pytest.mark.asyncio
+async def test_4xx_when_querying_if_book_exists_returns_false(httpx_mock, caplog: LogCaptureFixture):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_response(status_code=404, url="https://testurl/books/1")
+    client = BookRecommenderApiClient(properties=TEST_PROPERTIES)
+
+    # When
+    response = await client.does_book_exist(1)
+
+    # Then
+    assert_that(response).is_false()
+    assert_that(caplog.text).contains("does not exist", "book_id: 1", "https://testurl/books/1")
+
+
+@pytest.mark.asyncio
+async def test_5xx_when_querying_if_book_exists_throws_exception(httpx_mock, caplog: LogCaptureFixture):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_response(status_code=500, url="https://testurl/books/1")
+    client = BookRecommenderApiClient(properties=TEST_PROPERTIES)
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        await client.does_book_exist(1)
+
+    assert_that(caplog.text).contains("Received 5xx exception from server", "book_id: 1",
+                                      "https://testurl/books/1")
+
+
+@pytest.mark.asyncio
+async def test_unhandled_exceptions_when_querying_if_book_exists_throws_exception(httpx_mock,
+                                                                                  caplog: LogCaptureFixture):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
+    client = BookRecommenderApiClient(properties=TEST_PROPERTIES)
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        await client.does_book_exist(1)
+
+    assert_that(caplog.text).contains("Uncaught Exception", "Unable to read within timeout", "book_id: 1",
+                                      "https://testurl/books/1")
+
+
 @pytest.fixture
 def assert_all_responses_were_requested() -> bool:
     return False
