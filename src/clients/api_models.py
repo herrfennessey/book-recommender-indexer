@@ -22,7 +22,6 @@ class BookDataV1(BaseModel):
     rating_histogram: List[int]
 
     # Book Information
-    book_id: int
     book_url: str
     book_title: str
     book_description: Optional[str]

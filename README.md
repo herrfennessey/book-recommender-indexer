@@ -1,7 +1,14 @@
 # book-recommender-indexer
 
-This is a pubsub subscriber that listens to the topics produced by our scrapers. If the item doesn't exist in the
-database, it will be added. 
+
+
+This is where the business logic of the scraping infrastructure lives. It will receive messages on multiple pubsub
+topics, such as users to crawl, books to crawl, etc. It has debouncing logic built in to where it will try and avoid
+redundant operations, such as crawling a book we already have a copy of.
+
+Currently, it is listening to the following topics:
+
+* `scraper-book-v1`
 
 ## Setup
 

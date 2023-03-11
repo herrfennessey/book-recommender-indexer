@@ -13,7 +13,7 @@ from src.clients.book_recommender_api_client import BookRecommenderApiClient, Bo
 from src.routes.api_models import PubSubMessage
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/pubsub-books")
+router = APIRouter(prefix="/pubsub/books")
 
 """
 The message pubsub sends us roughly follows this schema - data is base 64 encoded
