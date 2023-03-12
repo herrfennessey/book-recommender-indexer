@@ -32,11 +32,11 @@ class BookV1ApiRequest(BaseModel):
     genres: List[str] = list()
     scrape_time: str
 
-    @validator("publish_date", pre=True, allow_reuse=True)
-    def convert_publish_date_to_string_if_exists(cls, publish_date):
-        if publish_date:
+    @validator("publish_date", "scrape_time", pre=True, allow_reuse=True)
+    def convert_dates_and_times_to_strings(cls, input_datetime):
+        if input_datetime:
             # httpx doesn't like datetime objects in its json serializer
-            return str(publish_date.isoformat())
+            return str(input_datetime.isoformat())
 
 
 class UserReviewV1ApiRequest(BaseModel):
