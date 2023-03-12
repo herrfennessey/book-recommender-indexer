@@ -1,0 +1,7 @@
+steps:
+  - name: python:3.10-slim
+    entrypoint: pip
+    args: [ "install", "-r", "requirements.txt", "--user" ]
+  - name: python:3.10-slim
+    entrypoint: python
+    args: [ "-m", "pytest", "--junitxml=${SHORT_SHA}_test_log.xml" ]
