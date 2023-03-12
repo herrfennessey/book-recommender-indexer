@@ -39,16 +39,11 @@ class BookV1ApiRequest(BaseModel):
             return str(publish_date.isoformat())
 
 
-
 class UserReviewV1ApiRequest(BaseModel):
     user_rating: int
     date_read: str
     scrape_time: str
 
-    @validator("date_read", pre=True, allow_reuse=True)
-    def convert_date_read_to_string(cls, date_read):
-        return str(date_read.isoformat())
-
-    @validator("scrape_time", pre=True, allow_reuse=True)
-    def convert_date_read_to_string(cls, scrape_time):
-        return str(scrape_time.isoformat())
+    @validator("date_read", "scrape_time", pre=True)
+    def convert_date_read_to_string(cls, input_datetime):
+        return str(input_datetime.isoformat())

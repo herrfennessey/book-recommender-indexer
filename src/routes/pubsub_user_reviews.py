@@ -61,7 +61,7 @@ async def handle_pubsub_message(
 
     service_response = await user_review_service.process_pubsub_message(user_review)
     # I don't like putting this business logic here, but background tasks in fastapi were designed to run from routes
-    if service_response.book_missing:
+    if service_response.scraped_book:
         # If the book is missing from our DB, we should try and scrape it, but the user shouldn't have to wait
         background_tasks.add_task(scraper_client.trigger_book_scrape(user_review.book_id))
         logging.info("Added scrape task for book %s", user_review.book_id)
