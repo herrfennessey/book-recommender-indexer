@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
+from cachetools import TTLCache, LRUCache
 from fastapi.testclient import TestClient
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
@@ -28,7 +29,10 @@ def scraper_client():
 
 @pytest.fixture()
 def user_review_service():
-    user_review_service = get_user_review_service(BookRecommenderApiClient(Properties()))
+    user_review_service = get_user_review_service(BookRecommenderApiClient(Properties(),
+                                                                           user_read_books_cache=TTLCache(maxsize=100,
+                                                                                                          ttl=60),
+                                                                           book_exists_cache=LRUCache(maxsize=100)))
     user_review_service.process_pubsub_message = AsyncMock()
     yield user_review_service
 
@@ -86,6 +90,7 @@ def test_well_formed_request_but_not_a_valid_user_review_returns_200(test_client
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(caplog.text).contains("Error converting payload into user review object")
+
 
 def _stub_scraper_client(scraper_client):
     app.dependency_overrides[get_scraper_client_v2] = lambda: scraper_client

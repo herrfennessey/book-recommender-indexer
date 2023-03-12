@@ -53,22 +53,6 @@ async def test_5xx_custom_exception_on_book_scrape(httpx_mock, caplog: LogCaptur
 
 
 @pytest.mark.asyncio
-async def test_background_tasks_get_called(httpx_mock, caplog: LogCaptureFixture, background_tasks: BackgroundTasks):
-    """
-    Can't really unit test the background tasks mechanism itself, so we'll have to assume that part actually works
-    """
-    # Given
-    caplog.set_level("INFO", logger="scraper_client_v2")
-    client = ScraperClientV2(TEST_PROPERTIES, background_tasks)
-
-    # When / Then
-    await client.trigger_background_task_book_scrape(1)
-
-    background_tasks.add_task.assert_called_once()
-    assert_that(caplog.text).contains("book_id: 1", "Triggering background scrape")
-
-
-@pytest.mark.asyncio
 async def test_uncaught_exception_on_book_scrape(httpx_mock, caplog: LogCaptureFixture,
                                                  background_tasks: BackgroundTasks):
     # Given
@@ -83,6 +67,22 @@ async def test_uncaught_exception_on_book_scrape(httpx_mock, caplog: LogCaptureF
         "Unable to read",
         "book_id: 1"
     )
+
+
+@pytest.mark.asyncio
+async def test_background_tasks_get_called(httpx_mock, caplog: LogCaptureFixture, background_tasks: BackgroundTasks):
+    """
+    Can't really unit test the background tasks mechanism itself, so we'll have to assume that part actually works
+    """
+    # Given
+    caplog.set_level("INFO", logger="scraper_client_v2")
+    client = ScraperClientV2(TEST_PROPERTIES, background_tasks)
+
+    # When / Then
+    await client.trigger_background_task_book_scrape(1)
+
+    background_tasks.add_task.assert_called_once()
+    assert_that(caplog.text).contains("book_id: 1", "Triggering background scrape")
 
 
 @pytest.fixture

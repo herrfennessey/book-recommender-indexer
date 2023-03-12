@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
+from cachetools import LRUCache, TTLCache
 from fastapi.testclient import TestClient
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
@@ -20,7 +21,9 @@ file_root_path = Path(os.path.dirname(__file__))
 
 @pytest.fixture()
 def book_recommender_api_client():
-    book_recommender_api_client = BookRecommenderApiClient(Properties())
+    book_recommender_api_client = BookRecommenderApiClient(Properties(),
+                                                           user_read_books_cache=TTLCache(maxsize=1000, ttl=60),
+                                                           book_exists_cache=LRUCache(maxsize=1000))
     book_recommender_api_client.create_book = AsyncMock(return_value={"result": "success"})
     yield book_recommender_api_client
 

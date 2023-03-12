@@ -59,11 +59,6 @@ async def handle_pubsub_message(
         logging.error("Error converting payload into user review object. Received: %s Error: %s", json_payload, e)
         return Response(status_code=HTTP_200_OK)
 
-    service_response = await user_review_service.process_pubsub_message(user_review)
-    # I don't like putting this business logic here, but background tasks in fastapi were designed to run from routes
-    if service_response.scraped_book:
-        # If the book is missing from our DB, we should try and scrape it, but the user shouldn't have to wait
-        background_tasks.add_task(scraper_client.trigger_book_scrape(user_review.book_id))
-        logging.info("Added scrape task for book %s", user_review.book_id)
+    await user_review_service.process_pubsub_message(user_review)
 
     return Response(status_code=HTTP_200_OK)
