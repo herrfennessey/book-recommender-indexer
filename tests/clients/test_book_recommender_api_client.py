@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from typing import Dict, Any
 
 import httpx
@@ -298,6 +299,85 @@ async def test_unhandled_exceptions_when_querying_if_book_exists_throws_exceptio
                                       "https://testurl/books/1")
 
 
+@pytest.mark.asyncio
+async def test_successful_user_review_creation(httpx_mock, caplog: LogCaptureFixture,
+                                               book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_response(status_code=200, url="https://testurl/users/1/reviews/2")
+    review = _a_random_review()
+
+    # When
+    await book_recommender_api_client.create_user_review(review)
+
+    # Then
+    assert_that(caplog.text).contains("Successfully wrote review", "user_id: 1", "book_id: 2")
+
+
+@pytest.mark.asyncio
+async def test_4xx_user_review_creation_throws_exception(httpx_mock, caplog: LogCaptureFixture,
+                                                         book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_response(status_code=404, url="https://testurl/users/1/reviews/2")
+    review = _a_random_review()
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiClientException):
+        await book_recommender_api_client.create_user_review(review)
+
+    assert_that(caplog.text).contains("Received 4xx exception from server", "user_id: 1", "book_id: 2",
+                                      "https://testurl/users/1/reviews/2")
+
+
+@pytest.mark.asyncio
+async def test_5xx_user_review_creation_throws_exception(httpx_mock, caplog: LogCaptureFixture,
+                                                         book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_response(status_code=500, url="https://testurl/users/1/reviews/2")
+    review = _a_random_review()
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        await book_recommender_api_client.create_user_review(review)
+
+    assert_that(caplog.text).contains("Received 5xx exception from server", "user_id: 1", "book_id: 2",
+                                      "https://testurl/users/1/reviews/2")
+
+
+@pytest.mark.asyncio
+async def test_unhandled_exceptions_when_creating_user_review_throws_exception(httpx_mock,
+                                                                               caplog: LogCaptureFixture,
+                                                                               book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
+    review = _a_random_review()
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        await book_recommender_api_client.create_user_review(review)
+
+    assert_that(caplog.text).contains("Uncaught Exception", "Unable to read within timeout", "user_id: 1", "book_id: 2",
+                                      "https://testurl/users/1/reviews/2")
+
+
+@pytest.mark.asyncio
+async def test_successful_user_review_creation(httpx_mock, caplog: LogCaptureFixture,
+                                               book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_response(status_code=200, url="https://testurl/users/1/reviews/2")
+    review = _a_random_review()
+
+    # When
+    await book_recommender_api_client.create_user_review(review)
+
+    # Then
+    assert_that(caplog.text).contains("Successfully wrote review", "user_id: 1", "book_id: 2")
+
+
 @pytest.fixture
 def assert_all_responses_were_requested() -> bool:
     return False
@@ -315,4 +395,14 @@ def _a_random_book() -> Dict[str, Any]:
         "book_title": "A Random Book Title",
         "book_url": "www.bookurl.com",
         "scrape_time": "2022-09-01T00:00:00.000000",
+    }
+
+
+def _a_random_review() -> Dict[str, Any]:
+    return {
+        "user_id": "1",
+        "book_id": "2",
+        "date_read": datetime(2017, 1, 1),
+        "scrape_time": datetime.now(),
+        "user_rating": 5
     }

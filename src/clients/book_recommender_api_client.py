@@ -133,7 +133,7 @@ class BookRecommenderApiClient(object):
         try:
             response = httpx.put(url, json=user_review.dict())
             if not response.is_error:
-                logger.info("Successfully wrote user review: {}".format(book_id))
+                logger.info("Successfully wrote review for user_id: {} book_id: {}".format(user_id, book_id))
                 return
             elif response.is_client_error:
                 logger.error(
