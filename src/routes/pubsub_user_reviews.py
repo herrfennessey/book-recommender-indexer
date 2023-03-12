@@ -3,12 +3,11 @@ import json
 import logging
 from json import JSONDecodeError
 
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 from starlette.responses import Response
 from starlette.status import HTTP_200_OK
 
-from src.clients.scraper_client_v2 import ScraperClientV2, get_scraper_client_v2
 from src.routes.pubsub_models import PubSubMessage, PubSubUserReviewV1
 from src.services.user_review_service import get_user_review_service, UserReviewService
 
@@ -35,9 +34,7 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 @router.post("/handle", tags=["user-reviews"], status_code=200)
 async def handle_pubsub_message(
         request: PubSubMessage,
-        background_tasks: BackgroundTasks,
-        user_review_service: UserReviewService = Depends(get_user_review_service),
-        scraper_client: ScraperClientV2 = Depends(get_scraper_client_v2)
+        user_review_service: UserReviewService = Depends(get_user_review_service)
 ):
     """
     Handle a pubsub POST call. We do not use the actual pubsub library, but instead receive the message

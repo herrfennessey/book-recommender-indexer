@@ -52,5 +52,6 @@ class UserReviewService(object):
 
 def get_user_review_service(
         book_recommender_api_client: BookRecommenderApiClient = Depends(get_book_recommender_api_client),
-        scraper_client: ScraperClientV2 = Depends(get_scraper_client_v2)) -> UserReviewService:
+        scraper_client: ScraperClientV2 = Depends(get_scraper_client_v2)
+) -> UserReviewService:
     return UserReviewService(book_recommender_api_client, scraper_client)

@@ -64,14 +64,14 @@ class ScraperClientV2(object):
 
     async def trigger_background_task_book_scrape(self, book_id):
         logger.info("book_id: {} does not exist in our DB. Triggering background scrape".format(book_id))
-        self.background_tasks.add_task(self.trigger_book_scrape(book_id))
+        self.background_tasks.add_task(self.trigger_book_scrape, book_id)
 
 
 class ScraperClientV2Exception(Exception):
     pass
 
 
-def get_background_tasks(self, background_tasks: BackgroundTasks) -> BackgroundTasks:
+def get_background_tasks(background_tasks: BackgroundTasks) -> BackgroundTasks:
     """
     Just a wrapper dependency for BackgroundTasks -- It makes for easier testing. The scraper client is the only
     user of BackgroundTasks so I figured I'd just put it in here
