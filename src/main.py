@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.routes import pubsub_books
+from src.routes import pubsub_books, pubsub_user_reviews
 
 # setup loggers to display more information
 log_file_path = path.join(path.dirname(path.abspath(__file__)), "logging.conf")
@@ -50,3 +50,4 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 app.include_router(pubsub_books.router)
+app.include_router(pubsub_user_reviews.router)
