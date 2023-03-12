@@ -4,9 +4,8 @@ import httpx
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
-from httpx import ReadTimeout
 
-from src.clients.scraper_client_v2 import ScraperClientV2, ScraperClientV2Exception
+from src.clients.scraper_client_v2 import ScraperClientV2
 from src.dependencies import Properties
 
 TEST_PROPERTIES = Properties(scraper_client_base_url="https://testurl", env_name="test",

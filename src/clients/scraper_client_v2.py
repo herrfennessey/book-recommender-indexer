@@ -2,7 +2,7 @@ import logging
 from functools import lru_cache
 
 import httpx
-from fastapi import Depends
+from fastapi import Depends, BackgroundTasks
 from pydantic import BaseModel
 
 from src.dependencies import Properties
@@ -53,7 +53,7 @@ class ScraperClientV2(object):
                                                                         topic_name=self.pubsub_book_topic_name))
         url = f"{self.base_url}/crawl.json"
         try:
-            response = httpx.post(url, data=scrape_request.json())
+            response = httpx.post(url, json=scrape_request.dict())
             if not response.is_error:
                 logger.info("Successfully triggered book scrape for book_id: {}".format(book_id))
             else:
@@ -61,9 +61,18 @@ class ScraperClientV2(object):
         except Exception as e:
             logger.error("Unable to scrape book_id: {} due to exception: {}".format(book_id, e))
 
+
 class ScraperClientV2Exception(Exception):
     pass
 
 
 def get_scraper_client_v2(properties: Properties = Depends(get_properties)):
     return ScraperClientV2(properties)
+
+
+def get_background_tasks(background_tasks: BackgroundTasks) -> BackgroundTasks:
+    """
+    Just a wrapper dependency for BackgroundTasks -- It makes for easier testing. The scraper client is the only
+    user of BackgroundTasks so I figured I'd just put it in here
+    """
+    return background_tasks

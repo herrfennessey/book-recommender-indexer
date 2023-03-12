@@ -11,23 +11,33 @@ from assertpy import assert_that
 from fastapi.testclient import TestClient
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
+from src.clients.scraper_client_v2 import get_scraper_client_v2, ScraperClientV2
 from src.dependencies import Properties
 from src.main import app
+from src.services.user_review_service import get_user_review_service, UserReviewService, UserReviewServiceResponse
 
 file_root_path = Path(os.path.dirname(__file__))
 
 
 @pytest.fixture()
-def book_recommender_api_client():
-    book_recommender_api_client = BookRecommenderApiClient(Properties())
-    book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value={"book_ids": [1, 2, 3]})
-    yield book_recommender_api_client
+def scraper_client():
+    scraper_client = get_scraper_client_v2(Properties())
+    scraper_client.trigger_book_scrape = AsyncMock()
+    yield scraper_client
+
+
+@pytest.fixture()
+def user_review_service():
+    user_review_service = get_user_review_service(BookRecommenderApiClient(Properties()))
+    user_review_service.process_pubsub_message = AsyncMock()
+    yield user_review_service
 
 
 @pytest.fixture(autouse=True)
-def run_around_tests(book_recommender_api_client):
+def run_around_tests(user_review_service: UserReviewService, scraper_client: ScraperClientV2):
     # Code run before all tests
-    _stub_book_recommender_api_client(book_recommender_api_client)
+    _stub_user_review_service(user_review_service)
+    _stub_scraper_client(scraper_client)
 
     yield
     # Code that will run after each test
@@ -50,100 +60,39 @@ def test_handle_endpoint_rejects_malformed_requests(test_client: TestClient):
     assert_that(response.status_code).is_equal_to(422)
 
 
-#
-# def test_book_recommender_client_error_handled(book_recommender_api_client: BookRecommenderApiClient,
-#                                                test_client: TestClient,
-#                                                caplog: LogCaptureFixture):
-#     # Given
-#     book_recommender_api_client.create_book = AsyncMock(side_effect=BookRecommenderApiClientException("Boom!"))
-#     caplog.set_level(logging.ERROR, logger="pubsub_books")
-#     message = _an_example_pubsub_post_call()
-#     message["message"]["data"] = _a_base_64_encoded_user_review()
-#
-#     # When
-#     response = test_client.post("/pubsub/books/handle", json=message)
-#
-#     # Then
-#     assert_that(response.status_code).is_equal_to(200)
-#     assert_that(caplog.text).contains("Book Recommender API thinks the payload was malformed")
-#
-#
-# def test_book_recommender_server_error_handled(book_recommender_api_client: BookRecommenderApiClient,
-#                                                test_client: TestClient,
-#                                                caplog: LogCaptureFixture):
-#     # Given
-#     book_recommender_api_client.create_book = AsyncMock(side_effect=BookRecommenderApiServerException("Boom!"))
-#     caplog.set_level(logging.ERROR, logger="pubsub_books")
-#     message = _an_example_pubsub_post_call()
-#     message["message"]["data"] = _a_base_64_encoded_book()
-#
-#     # When
-#     response = test_client.post("/pubsub/books/handle", json=message)
-#
-#     # Then
-#     assert_that(response.status_code).is_equal_to(500)
-#     assert_that(caplog.text).contains("HTTP Exception occurred when calling Book Recommender API")
-#
-#
-# def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
-#     # Given
-#     caplog.set_level(logging.ERROR, logger="pubsub_books")
-#     message = _an_example_pubsub_post_call()
-#
-#     # When
-#     response = test_client.post("/pubsub/books/handle", json=message)
-#
-#     # Then
-#     assert_that(response.status_code).is_equal_to(200)
-#     assert_that(caplog.text).contains("Payload was not in JSON")
-#
-#
-# def test_well_formed_request_but_not_a_valid_book_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
-#     # Given
-#     caplog.set_level(logging.ERROR, logger="pubsub_books")
-#     message = _an_example_pubsub_post_call()
-#     message["message"]["data"] = _a_base_64_encoded_random_json_object()
-#
-#     # When
-#     response = test_client.post("/pubsub/books/handle", json=message)
-#
-#     # Then
-#     assert_that(response.status_code).is_equal_to(200)
-#     assert_that(caplog.text).contains("Error converting payload into book object")
-
-
-def test_book_review_which_doesnt_exist_successfully_writes_to_db(test_client: TestClient, caplog: LogCaptureFixture):
+def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
     # Given
-    caplog.set_level(logging.INFO, logger="pubsub_user_reviews")
+    caplog.set_level(logging.ERROR, logger="pubsub_user_reviews")
     message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _a_base_64_encoded_user_review()
 
     # When
     response = test_client.post("/pubsub/user-reviews/handle", json=message)
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).is_empty()
+    assert_that(caplog.text).contains("Payload was not in JSON")
 
 
-def test_book_review_which_already_exists_doesnt_try_and_create(test_client: TestClient, caplog: LogCaptureFixture,
-                                                                book_recommender_api_client: BookRecommenderApiClient):
+def test_well_formed_request_but_not_a_valid_user_review_returns_200(test_client: TestClient,
+                                                                     caplog: LogCaptureFixture):
     # Given
-    book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value=[13501])
-    caplog.set_level(logging.INFO, logger="pubsub_user_reviews")
+    caplog.set_level(logging.ERROR, logger="pubsub_user_reviews")
     message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _a_base_64_encoded_user_review()
+    message["message"]["data"] = _a_base_64_encoded_random_json_object()
 
     # When
     response = test_client.post("/pubsub/user-reviews/handle", json=message)
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("User 1 has already read book 13501")
+    assert_that(caplog.text).contains("Error converting payload into user review object")
+
+def _stub_scraper_client(scraper_client):
+    app.dependency_overrides[get_scraper_client_v2] = lambda: scraper_client
 
 
-def _stub_book_recommender_api_client(book_recommender_api_client):
-    app.dependency_overrides[get_book_recommender_api_client] = lambda: book_recommender_api_client
+def _stub_user_review_service(user_review_service):
+    app.dependency_overrides[get_user_review_service] = lambda: user_review_service
 
 
 def _an_example_pubsub_post_call():

@@ -29,7 +29,7 @@ class BookRecommenderApiClient(object):
         book = BookV1ApiRequest(**book_dict)
         url = f"{self.base_url}/books/{book_id}"
         try:
-            response = httpx.put(url, data=book.json())
+            response = httpx.put(url, json=book.dict())
             if not response.is_error:
                 logger.info("Successfully wrote book: {}".format(book_id))
                 return

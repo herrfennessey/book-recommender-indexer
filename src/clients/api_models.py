@@ -1,8 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
 
-import isbnlib
-from dateutil.parser import parse
 from pydantic import BaseModel, validator
 
 
@@ -10,7 +8,7 @@ class BookV1ApiRequest(BaseModel):
     # Work Details
     work_internal_id: str
     work_id: int
-    publish_date: Optional[datetime]
+    publish_date: Optional[str]
     original_title: Optional[str]
     author: str
     author_url: str
@@ -32,10 +30,25 @@ class BookV1ApiRequest(BaseModel):
     asin: Optional[str]
     series: Optional[str]
     genres: List[str] = list()
-    scrape_time: datetime
+    scrape_time: str
+
+    @validator("publish_date", pre=True, allow_reuse=True)
+    def convert_publish_date_to_string_if_exists(cls, publish_date):
+        if publish_date:
+            # httpx doesn't like datetime objects in its json serializer
+            return str(publish_date.isoformat())
+
 
 
 class UserReviewV1ApiRequest(BaseModel):
     user_rating: int
-    date_read: datetime
-    scrape_time: datetime
+    date_read: str
+    scrape_time: str
+
+    @validator("date_read", pre=True, allow_reuse=True)
+    def convert_date_read_to_string(cls, date_read):
+        return str(date_read.isoformat())
+
+    @validator("scrape_time", pre=True, allow_reuse=True)
+    def convert_date_read_to_string(cls, scrape_time):
+        return str(scrape_time.isoformat())
