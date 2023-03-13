@@ -13,15 +13,15 @@ def purge_queues(task_queue: CloudTasksClient) -> None:
 
 
 @fixture(autouse=True)
-def run_before_tests(task_queue: CloudTasksClient):
+def run_before_tests(cloud_tasks):
     # Things to happen before
-    purge_queues(task_queue)
+    purge_queues(cloud_tasks)
     yield  # this is where the testing happens
     # This happens afterwards
 
 
 @fixture(scope="session", autouse=True)
-def task_queue():
+def cloud_tasks():
     with CloudTasksContainer() as container:
         wait_for_logs(container, "Creating initial queue", 20)
         yield container.get_client()

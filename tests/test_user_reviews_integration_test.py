@@ -11,20 +11,12 @@ from assertpy import assert_that
 from cachetools import TTLCache, LRUCache
 from fastapi.testclient import TestClient
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
-from src.clients.scraper_client_v2 import get_scraper_client_v2, ScraperClientV2
+from src.clients.book_recommender_api_client import BookRecommenderApiClient
 from src.dependencies import Properties
 from src.main import app
-from src.services.user_review_service import get_user_review_service, UserReviewService, UserReviewServiceResponse
+from src.services.user_review_service import get_user_review_service, UserReviewService
 
 file_root_path = Path(os.path.dirname(__file__))
-
-
-@pytest.fixture()
-def scraper_client():
-    scraper_client = get_scraper_client_v2(Properties())
-    scraper_client.trigger_book_scrape = AsyncMock()
-    yield scraper_client
 
 
 @pytest.fixture()
@@ -38,10 +30,9 @@ def user_review_service():
 
 
 @pytest.fixture(autouse=True)
-def run_around_tests(user_review_service: UserReviewService, scraper_client: ScraperClientV2):
+def run_around_tests(user_review_service: UserReviewService):
     # Code run before all tests
     _stub_user_review_service(user_review_service)
-    _stub_scraper_client(scraper_client)
 
     yield
     # Code that will run after each test
@@ -90,10 +81,6 @@ def test_well_formed_request_but_not_a_valid_user_review_returns_200(test_client
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(caplog.text).contains("Error converting payload into user review object")
-
-
-def _stub_scraper_client(scraper_client):
-    app.dependency_overrides[get_scraper_client_v2] = lambda: scraper_client
 
 
 def _stub_user_review_service(user_review_service):
