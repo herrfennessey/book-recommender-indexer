@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 
 import grpc
@@ -12,6 +13,7 @@ from src.dependencies import Properties
 BOOK_SPIDER_NAME = "book"
 USER_REVIEWS_SPIDER_NAME = "user_reviews"
 
+logger = logging.getLogger(__name__)
 
 @lru_cache()
 def get_properties():
@@ -62,7 +64,7 @@ class TaskClient(object):
         return self.client.create_task(parent=parent, task=task.dict())
 
 
-def get_task_client(properties: Properties = Depends(get_properties)):
+def get_cloud_tasks_client(properties: Properties = Depends(get_properties)):
     if properties.env_name == "local":
         transport = CloudTasksGrpcTransport(channel=grpc.insecure_channel('localhost:8123'))
         return CloudTasksClient(transport=transport)
@@ -70,5 +72,6 @@ def get_task_client(properties: Properties = Depends(get_properties)):
         return CloudTasksClient()
 
 
-def get_cloud_tasks_client(properties: Properties = Depends(get_properties)):
-    return CloudTasksClient(properties)
+def get_task_client(client: CloudTasksClient = Depends(get_cloud_tasks_client),
+                     properties: Properties = Depends(get_properties)):
+    return TaskClient(client, properties)

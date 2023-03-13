@@ -1,11 +1,11 @@
 import logging
 
-from fastapi import Depends, BackgroundTasks
+from fastapi import Depends
 from pydantic import BaseModel
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
     BookRecommenderApiClientException
-from src.clients.scraper_client_v2 import ScraperClientV2, get_scraper_client_v2, get_background_tasks
+from src.clients.task_client import get_task_client, TaskClient
 from src.routes.pubsub_models import PubSubUserReviewV1
 
 logger = logging.getLogger(__name__)
@@ -17,9 +17,9 @@ class UserReviewServiceResponse(BaseModel):
 
 
 class UserReviewService(object):
-    def __init__(self, book_recommender_api_client: BookRecommenderApiClient, scraper_client: ScraperClientV2):
+    def __init__(self, book_recommender_api_client: BookRecommenderApiClient, task_client: TaskClient):
         self.book_recommender_api_client = book_recommender_api_client
-        self.scraper_client = scraper_client
+        self.task_client = task_client
 
     async def process_pubsub_message(self, pubsub_message: PubSubUserReviewV1) -> UserReviewServiceResponse:
         response = UserReviewServiceResponse()
@@ -40,7 +40,7 @@ class UserReviewService(object):
         # If this is a new book, we should also trigger a background task to scrape it, but the user shouldn't wait
         book_exists = await self.book_recommender_api_client.does_book_exist(book_id)
         if not book_exists:
-            await self.scraper_client.trigger_background_task_book_scrape(book_id)
+            self.task_client.enqueue_book(book_id)
             response.scraped_book = True
 
         return response
@@ -52,6 +52,6 @@ class UserReviewService(object):
 
 def get_user_review_service(
         book_recommender_api_client: BookRecommenderApiClient = Depends(get_book_recommender_api_client),
-        scraper_client: ScraperClientV2 = Depends(get_scraper_client_v2)
+        task_client: TaskClient = Depends(get_task_client)
 ) -> UserReviewService:
-    return UserReviewService(book_recommender_api_client, scraper_client)
+    return UserReviewService(book_recommender_api_client, task_client)
