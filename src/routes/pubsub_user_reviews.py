@@ -56,6 +56,4 @@ async def handle_pubsub_message(
         logging.error("Error converting payload into user review object. Received: %s Error: %s", json_payload, e)
         return Response(status_code=HTTP_200_OK)
 
-    await user_review_service.process_pubsub_message(user_review)
-
-    return Response(status_code=HTTP_200_OK)
+    return await user_review_service.process_pubsub_message(user_review)

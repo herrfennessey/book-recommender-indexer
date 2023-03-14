@@ -3,39 +3,19 @@ import json
 import logging
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
-from cachetools import LRUCache, TTLCache
 from fastapi.testclient import TestClient
-
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
-    BookRecommenderApiClientException, BookRecommenderApiServerException
-from src.dependencies import Properties
-from src.main import app
 
 file_root_path = Path(os.path.dirname(__file__))
 
 
-@pytest.fixture()
-def book_recommender_api_client():
-    book_recommender_api_client = BookRecommenderApiClient(Properties(),
-                                                           user_read_books_cache=TTLCache(maxsize=1000, ttl=60),
-                                                           book_exists_cache=LRUCache(maxsize=1000))
-    book_recommender_api_client.create_book = AsyncMock(return_value={"result": "success"})
-    yield book_recommender_api_client
-
-
-@pytest.fixture(autouse=True)
-def run_around_tests(book_recommender_api_client):
-    # Code run before all tests
-    _stub_book_recommender_api_client(book_recommender_api_client)
-
-    yield
-    # Code that will run after each test
-    app.dependency_overrides = {}
+@pytest.fixture
+def non_mocked_hosts() -> list:
+    # We don't want to mock the actual service endpoint, just the underlying httpx calls
+    return ["testserver"]
 
 
 def test_handle_endpoint_doesnt_allow_gets(test_client: TestClient):
@@ -43,7 +23,17 @@ def test_handle_endpoint_doesnt_allow_gets(test_client: TestClient):
     assert_that(response.status_code).is_equal_to(405)
 
 
-def test_handle_endpoint_rejects_malformed_requests(test_client: TestClient):
+def test_handle_endpoint_logs_error_but_suppresses_exception(test_client: TestClient, caplog: LogCaptureFixture):
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _invalid_base_64_object()
+
+    response = test_client.post("/pubsub/books/handle", json=message)
+
+    assert_that(caplog.text).contains("Uncaught Exception", "Incorrect padding", _invalid_base_64_object())
+    assert_that(response.status_code).is_equal_to(200)
+
+
+def test_handle_endpoint_rejects_non_book_objects(test_client: TestClient):
     # Given
     request = {"malformed_request": 123}
 
@@ -54,11 +44,9 @@ def test_handle_endpoint_rejects_malformed_requests(test_client: TestClient):
     assert_that(response.status_code).is_equal_to(422)
 
 
-def test_book_recommender_client_error_handled(book_recommender_api_client: BookRecommenderApiClient,
-                                               test_client: TestClient,
-                                               caplog: LogCaptureFixture):
+def test_book_recommender_client_error_suppressed(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
-    book_recommender_api_client.create_book = AsyncMock(side_effect=BookRecommenderApiClientException("Boom!"))
+    _put_call_receives_4xx(httpx_mock)
     caplog.set_level(logging.ERROR, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _a_base_64_encoded_book()
@@ -68,14 +56,12 @@ def test_book_recommender_client_error_handled(book_recommender_api_client: Book
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Book Recommender API thinks the payload was malformed")
+    assert_that(caplog.text).contains("API returned 4xx exception when called with payload")
 
 
-def test_book_recommender_server_error_handled(book_recommender_api_client: BookRecommenderApiClient,
-                                               test_client: TestClient,
-                                               caplog: LogCaptureFixture):
+def test_book_recommender_server_error_propagates(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
-    book_recommender_api_client.create_book = AsyncMock(side_effect=BookRecommenderApiServerException("Boom!"))
+    _put_call_receives_5xx(httpx_mock)
     caplog.set_level(logging.ERROR, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _a_base_64_encoded_book()
@@ -85,7 +71,7 @@ def test_book_recommender_server_error_handled(book_recommender_api_client: Book
 
     # Then
     assert_that(response.status_code).is_equal_to(500)
-    assert_that(caplog.text).contains("HTTP Exception occurred when calling Book Recommender API")
+    assert_that(caplog.text).contains("API returned 5xx Exception when called with payload")
 
 
 def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
@@ -115,9 +101,10 @@ def test_well_formed_request_but_not_a_valid_book_returns_200(test_client: TestC
     assert_that(caplog.text).contains("Error converting payload into book object")
 
 
-def test_well_formed_request_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
+def test_successful_book_write(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
-    caplog.set_level(logging.ERROR, logger="pubsub_books")
+    _put_call_is_successful(httpx_mock)
+    caplog.set_level(logging.INFO, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _a_base_64_encoded_book()
 
@@ -126,11 +113,19 @@ def test_well_formed_request_returns_200(test_client: TestClient, caplog: LogCap
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).is_empty()
+    assert_that(caplog.text).contains("Successfully wrote book: 4")
 
 
-def _stub_book_recommender_api_client(book_recommender_api_client):
-    app.dependency_overrides[get_book_recommender_api_client] = lambda: book_recommender_api_client
+def _put_call_is_successful(httpx_mock):
+    httpx_mock.add_response(status_code=200, url="http://localhost:9000/books/4", method="PUT")
+
+
+def _put_call_receives_4xx(httpx_mock):
+    httpx_mock.add_response(status_code=422, url="http://localhost:9000/books/4", method="PUT")
+
+
+def _put_call_receives_5xx(httpx_mock):
+    httpx_mock.add_response(status_code=500, url="http://localhost:9000/books/4", method="PUT")
 
 
 def _an_example_pubsub_post_call():
@@ -143,6 +138,11 @@ def _an_example_pubsub_post_call():
     }
 
 
+def _invalid_base_64_object():
+    # incorrectly padded base 64 object - should throw a gnarly error
+    return "ABHPdSaxrhjAWA="
+
+
 def _a_base_64_encoded_random_json_object():
     random_json = {"random": "json"}
     doc_bytes = json.dumps(random_json).encode("utf-8")
@@ -151,7 +151,7 @@ def _a_base_64_encoded_random_json_object():
 
 
 def _a_base_64_encoded_book():
-    with open(file_root_path / "resources/harry_potter.json", "r") as f:
+    with open(file_root_path.parents[0] / "resources/harry_potter.json", "r") as f:
         doc = json.load(f)
         doc_bytes = json.dumps(doc).encode("utf-8")
         doc_encoded = base64.b64encode(doc_bytes)
