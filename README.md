@@ -9,6 +9,7 @@ redundant operations, such as crawling a book we already have a copy of.
 Currently, it is listening to the following topics:
 
 * `scraper-book-v1`
+* `scraper-user-review-v1`
 
 ## Setup
 
