@@ -84,7 +84,7 @@ def test_user_review_doesnt_exist_book_exists(httpx_mock, test_client: TestClien
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(caplog.text).contains("Successfully wrote review for user_id: 1 book_id: 13501")
-    assert_that(response.json().get("scraped_book_task")).is_none()
+    assert_that(response.json().get("task_name")).is_none()
 
 
 def test_user_review_exists_book_doesnt_exist(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
@@ -102,7 +102,7 @@ def test_user_review_exists_book_doesnt_exist(httpx_mock, test_client: TestClien
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(cloud_tasks.get_task(name=response.json().get("scraped_book_task"))).is_not_none()
+    assert_that(cloud_tasks.get_task(name=response.json().get("task_name"))).is_not_none()
 
 
 def test_user_review_exists_book_exists(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture, cloud_tasks):
@@ -119,7 +119,7 @@ def test_user_review_exists_book_exists(httpx_mock, test_client: TestClient, cap
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(response.json().get("scraped_book_task")).is_none()
+    assert_that(response.json().get("task_name")).is_none()
 
 
 def test_user_review_doesnt_exist_book_doesnt_exist(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
@@ -139,7 +139,7 @@ def test_user_review_doesnt_exist_book_doesnt_exist(httpx_mock, test_client: Tes
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(caplog.text).contains("Successfully wrote review for user_id: 1 book_id: 13501")
-    assert_that(cloud_tasks.get_task(name=response.json().get("scraped_book_task"))).is_not_none()
+    assert_that(cloud_tasks.get_task(name=response.json().get("task_name"))).is_not_none()
 
 
 def test_user_review_doesnt_exist_but_put_receives_client_error_handled_gracefully(httpx_mock, test_client: TestClient,
@@ -160,7 +160,7 @@ def test_user_review_doesnt_exist_but_put_receives_client_error_handled_graceful
     assert_that(response.status_code).is_equal_to(200)
     assert_that(caplog.text).contains("Received 4xx response from API - Failed to index user review")
     assert_that(response.json().get("index_review")).is_none()
-    assert_that(response.json().get("scraped_book_task")).is_none()
+    assert_that(response.json().get("task_name")).is_none()
 
 
 def test_user_review_doesnt_exist_put_receives_server_error_propagates_exception_back(httpx_mock,

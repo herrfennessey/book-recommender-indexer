@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class UserReviewServiceResponse(BaseModel):
     indexed_review: bool = False
-    scraped_book_task: str = None
+    task_name: str = None
 
 
 class UserReviewService(object):
@@ -41,7 +41,7 @@ class UserReviewService(object):
         # If this is a new book, we should also trigger a background task to scrape it, but the user shouldn't wait
         book_exists = await self.book_recommender_api_client.does_book_exist(book_id)
         if not book_exists:
-            response.scraped_book_task = self.task_client.enqueue_book(book_id)
+            response.task_name = self.task_client.enqueue_book(book_id)
         return response
 
     async def _do_we_need_to_index_user_review(self, user_id, book_id):
