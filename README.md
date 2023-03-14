@@ -6,10 +6,11 @@ This is where the business logic of the scraping infrastructure lives. It will r
 topics, such as users to crawl, books to crawl, etc. It has debouncing logic built in to where it will try and avoid
 redundant operations, such as crawling a book we already have a copy of.
 
-Currently, it is listening to the following topics:
+Currently, the following topics are "pushing" to our cloud run indexer to the various endpoints, because cloud run can't use pub/sub like a grown up
 
 * `scraper-book-v1`
 * `scraper-user-review-v1`
+* `scraper-profile-v1`
 
 ## Setup
 
