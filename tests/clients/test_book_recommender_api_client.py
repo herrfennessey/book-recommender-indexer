@@ -90,14 +90,10 @@ async def test_uncaught_exception_on_put_book(httpx_mock, caplog: LogCaptureFixt
     httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
 
     # When / Then
-    with pytest.raises(BookRecommenderApiServerException):
+    with pytest.raises(BookRecommenderApiServerException) as e:
         await book_recommender_api_client.create_book(_a_random_book())
 
-    assert_that(caplog.text).contains(
-        "Unable to read within timeout",
-        "https://testurl/books/1",
-        "book_id: 1"
-    )
+    assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/books/1")
 
 
 @pytest.mark.asyncio
@@ -190,11 +186,10 @@ async def test_unhandled_exceptions_when_getting_books_read_throws_exception(htt
     httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
 
     # When / Then
-    with pytest.raises(BookRecommenderApiServerException):
+    with pytest.raises(BookRecommenderApiServerException) as e:
         await book_recommender_api_client.get_books_read_by_user(1)
 
-    assert_that(caplog.text).contains("Uncaught Exception", "Unable to read within timeout", "user_id: 1",
-                                      "https://testurl/users/1/book-ids")
+    assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/users/1/book-ids")
 
 
 @pytest.mark.asyncio
@@ -356,11 +351,11 @@ async def test_unhandled_exceptions_when_creating_user_review_throws_exception(h
     review = _a_random_review()
 
     # When / Then
-    with pytest.raises(BookRecommenderApiServerException):
+    with pytest.raises(BookRecommenderApiServerException) as e:
         await book_recommender_api_client.create_user_review(review)
 
-    assert_that(caplog.text).contains("Uncaught Exception", "Unable to read within timeout", "user_id: 1", "book_id: 2",
-                                      "https://testurl/users/1/reviews/2")
+    assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/users/1/reviews/2 ",
+                                          "user_id: 1 book_id: 2")
 
 
 @pytest.mark.asyncio

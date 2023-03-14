@@ -46,9 +46,7 @@ class BookRecommenderApiClient(object):
                 raise BookRecommenderApiServerException(
                     "5xx Exception encountered {} for book_id: {}".format(response.text, book_id))
         except httpx.HTTPError as e:
-            logging.error(
-                "Uncaught Exception: {} encountered for URL: {} for book_id: {}".format(e, url, book_id))
-            raise BookRecommenderApiServerException("Uncaught Exception encountered for book id: {}".format(book_id))
+            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
     async def get_books_read_by_user(self, user_id) -> List[int]:
         """
@@ -85,9 +83,7 @@ class BookRecommenderApiClient(object):
                 raise BookRecommenderApiServerException(
                     "5xx Exception encountered {} for user_id: {}".format(response.text, user_id))
         except httpx.HTTPError as e:
-            logging.error(
-                "Uncaught Exception: {} encountered for URL: {} for user_id: {}".format(e, url, user_id))
-            raise BookRecommenderApiServerException("Uncaught Exception encountered for user_id: {}".format(user_id))
+            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
     async def does_book_exist(self, book_id):
         """
@@ -111,19 +107,18 @@ class BookRecommenderApiClient(object):
                 self.book_exists_cache[book_id] = True
                 return True
             elif response.is_client_error:
-                logger.info("Received 4xx exception from server, assuming book_id: {} does not exist. URL: {} ".format(
-                    book_id, url))
+                logger.info("Received 4xx response. assuming book_id: {} does not exist. URL: {} ".format(book_id, url))
                 return False
             elif response.is_server_error:
                 logger.error(
                     "Received 5xx exception from server with body: {} URL: {} book_id: {}".format(response.text, url,
                                                                                                   book_id))
                 raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for book_id: {}".format(response.text, book_id))
+                    "5xx response encountered for URL {}".format(book_id))
         except httpx.HTTPError as e:
             logging.error(
                 "Uncaught Exception: {} encountered for URL: {} for book_id: {}".format(e, url, book_id))
-            raise BookRecommenderApiServerException("Uncaught Exception encountered for book id: {}".format(book_id))
+            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
     async def create_user_review(self, user_review_dict: Dict[str, Any]):
         user_id = user_review_dict.get("user_id")
@@ -148,11 +143,9 @@ class BookRecommenderApiClient(object):
                 raise BookRecommenderApiServerException(
                     "5xx Exception encountered {} for user_id: {} book_id: {}".format(response.text, user_id, book_id))
         except httpx.HTTPError as e:
-            logging.error(
-                "Uncaught Exception: {} encountered for URL: {} for user_id: {} book_id: {}".format(e, url, user_id,
-                                                                                                    book_id))
             raise BookRecommenderApiServerException(
-                "Uncaught Exception encountered for user_id: {} book_id: {}".format(user_id, book_id))
+                "HTTP Exception encountered: {} for URL {} "
+                "when creating review for user_id: {} book_id: {}".format(e, url, user_id, book_id))
 
 
 class BookRecommenderApiClientException(Exception):
