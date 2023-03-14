@@ -208,7 +208,7 @@ def _a_base_64_encoded_random_json_object():
 
 
 def _a_base_64_encoded_user_review():
-    with open(file_root_path / "resources/hedge_knight_user_review.json", "r") as f:
+    with open(file_root_path.parents[0] / "resources/hedge_knight_user_review.json", "r") as f:
         doc = json.load(f)
         doc_bytes = json.dumps(doc).encode("utf-8")
         doc_encoded = base64.b64encode(doc_bytes)
