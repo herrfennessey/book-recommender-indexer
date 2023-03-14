@@ -24,7 +24,7 @@ def book_recommender_api_client():
 @pytest.fixture()
 def task_client():
     with patch('src.clients.task_client') as mock_task_client:
-        mock_task_client.enqueue_book = MagicMock(return_value=None)
+        mock_task_client.enqueue_book = MagicMock(return_value="foo")
         yield mock_task_client
 
 
@@ -42,7 +42,7 @@ async def test_review_exists_book_exists(book_recommender_api_client: BookRecomm
 
     # Then
     assert_that(response.indexed_review).is_false()
-    assert_that(response.scraped_book).is_false()
+    assert_that(response.scraped_book_task).is_none()
 
     book_recommender_api_client.create_user_review.assert_not_called()
     task_client.enqueue_book.assert_not_called()
@@ -62,7 +62,7 @@ async def test_review_doesnt_exist_book_exists(book_recommender_api_client: Book
 
     # Then
     assert_that(response.indexed_review).is_true()
-    assert_that(response.scraped_book).is_false()
+    assert_that(response.scraped_book_task).is_none()
     book_recommender_api_client.create_user_review.assert_called_with(review.dict())
     task_client.enqueue_book.assert_not_called()
 
@@ -81,7 +81,7 @@ async def test_review_exists_book_doesnt_exist(book_recommender_api_client: Book
 
     # Then
     assert_that(response.indexed_review).is_false()
-    assert_that(response.scraped_book).is_true()
+    assert_that(response.scraped_book_task).is_equal_to("foo")
     book_recommender_api_client.create_user_review.assert_not_called()
     task_client.enqueue_book.assert_called_with(BOOK_ID)
 
@@ -101,7 +101,7 @@ async def test_review_doesnt_exist_book_doesnt_exist(book_recommender_api_client
 
     # Then
     assert_that(response.indexed_review).is_true()
-    assert_that(response.scraped_book).is_true()
+    assert_that(response.scraped_book_task).is_equal_to("foo")
     book_recommender_api_client.create_user_review.assert_called_with(review.dict())
     task_client.enqueue_book.assert_called_with(BOOK_ID)
 

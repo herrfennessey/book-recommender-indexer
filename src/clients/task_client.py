@@ -4,7 +4,7 @@ from functools import lru_cache
 import grpc
 from fastapi import Depends
 from google.cloud import tasks_v2
-from google.cloud.tasks_v2 import CloudTasksClient
+from google.cloud.tasks_v2 import CloudTasksClient, Task
 from google.cloud.tasks_v2.services.cloud_tasks.transports import CloudTasksGrpcTransport
 from pydantic import BaseModel
 
@@ -14,6 +14,7 @@ BOOK_SPIDER_NAME = "book"
 USER_REVIEWS_SPIDER_NAME = "user_reviews"
 
 logger = logging.getLogger(__name__)
+
 
 @lru_cache()
 def get_properties():
@@ -34,7 +35,7 @@ class BookScrapeRequest(BaseModel):
 
 class TaskQueuePayload(BaseModel):
     url: str
-    body: BookScrapeRequest
+    body: bytes
     http_method: int = tasks_v2.HttpMethod.POST
     headers: dict = {"Content-Type": "application/json"}
 
@@ -48,7 +49,7 @@ class TaskClient(object):
         self.properties = properties
         self.client = client
 
-    def enqueue_book(self, book_id: int):
+    def enqueue_book(self, book_id: int) -> str:
         book_scrape_request = BookScrapeRequest(spider_name=BOOK_SPIDER_NAME,
                                                 crawl_args=BookScrapeRequestArgs(books=book_id,
                                                                                  project_id=self.properties.gcp_project_name,
@@ -61,7 +62,8 @@ class TaskClient(object):
 
         parent = self.client.queue_path(self.properties.gcp_project_name, self.properties.cloud_task_region,
                                         self.properties.book_task_queue)
-        return self.client.create_task(parent=parent, task=task.dict())
+        response = self.client.create_task(parent=parent, task=task.dict())
+        return response.name
 
 
 def get_cloud_tasks_client(properties: Properties = Depends(get_properties)):
@@ -73,5 +75,5 @@ def get_cloud_tasks_client(properties: Properties = Depends(get_properties)):
 
 
 def get_task_client(client: CloudTasksClient = Depends(get_cloud_tasks_client),
-                     properties: Properties = Depends(get_properties)):
+                    properties: Properties = Depends(get_properties)):
     return TaskClient(client, properties)

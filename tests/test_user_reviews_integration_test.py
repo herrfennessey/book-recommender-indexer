@@ -3,40 +3,23 @@ import json
 import logging
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
-from cachetools import TTLCache, LRUCache
 from fastapi.testclient import TestClient
+from google.cloud.tasks_v2 import CloudTasksClient
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient
-from src.dependencies import Properties
 from src.main import app
-from src.services.user_review_service import get_user_review_service, UserReviewService
+from src.services.user_review_service import get_user_review_service
 
 file_root_path = Path(os.path.dirname(__file__))
 
 
-@pytest.fixture()
-def user_review_service():
-    user_review_service = get_user_review_service(BookRecommenderApiClient(Properties(),
-                                                                           user_read_books_cache=TTLCache(maxsize=100,
-                                                                                                          ttl=60),
-                                                                           book_exists_cache=LRUCache(maxsize=100)))
-    user_review_service.process_pubsub_message = AsyncMock()
-    yield user_review_service
-
-
-@pytest.fixture(autouse=True)
-def run_around_tests(user_review_service: UserReviewService):
-    # Code run before all tests
-    _stub_user_review_service(user_review_service)
-
-    yield
-    # Code that will run after each test
-    app.dependency_overrides = {}
+@pytest.fixture
+def non_mocked_hosts() -> list:
+    # We don't want to mock the actual service endpoint, just the underlying httpx calls
+    return ["testserver"]
 
 
 def test_handle_endpoint_doesnt_allow_gets(test_client: TestClient):
@@ -81,6 +64,101 @@ def test_well_formed_request_but_not_a_valid_user_review_returns_200(test_client
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(caplog.text).contains("Error converting payload into user review object")
+
+
+def test_user_review_doesnt_exist_book_exists(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
+                                              cloud_tasks):
+    # Given
+    _user_review_doesnt_exist(httpx_mock)
+    _user_review_put_successful(httpx_mock)
+    _book_exists(httpx_mock)
+
+    caplog.set_level(logging.INFO, logger="book_recommender_api_client")
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _a_base_64_encoded_user_review()
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(caplog.text).contains("Successfully wrote review for user_id: 1 book_id: 13501")
+    assert_that(response.json().get("scraped_book_task")).is_none()
+
+
+def test_user_review_exists_book_doesnt_exist(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
+                                              cloud_tasks):
+    # Given
+    _user_review_exists(httpx_mock)
+    _book_doesnt_exist(httpx_mock)
+
+    caplog.set_level(logging.INFO, logger="book_recommender_api_client")
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _a_base_64_encoded_user_review()
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(cloud_tasks.get_task(name=response.json().get("scraped_book_task"))).is_not_none()
+
+
+def test_user_review_exists_book_exists(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture, cloud_tasks):
+    # Given
+    _user_review_exists(httpx_mock)
+    _book_exists(httpx_mock)
+
+    caplog.set_level(logging.INFO, logger="book_recommender_api_client")
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _a_base_64_encoded_user_review()
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(response.json().get("scraped_book_task")).is_none()
+
+
+def test_user_review_doesnt_exist_book_doesnt_exist(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
+                                                    cloud_tasks: CloudTasksClient):
+    # Given
+    _user_review_doesnt_exist(httpx_mock)
+    _user_review_put_successful(httpx_mock)
+    _book_doesnt_exist(httpx_mock)
+
+    caplog.set_level(logging.INFO, logger="book_recommender_api_client")
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _a_base_64_encoded_user_review()
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(caplog.text).contains("Successfully wrote review for user_id: 1 book_id: 13501")
+    assert_that(cloud_tasks.get_task(name=response.json().get("scraped_book_task"))).is_not_none()
+
+
+def _user_review_exists(httpx_mock):
+    httpx_mock.add_response(json={"book_ids": [13501]}, status_code=200, url="http://localhost:9000/users/1/book-ids")
+
+
+def _book_exists(httpx_mock):
+    httpx_mock.add_response(status_code=200, url="http://localhost:9000/books/13501")
+
+
+def _book_doesnt_exist(httpx_mock):
+    httpx_mock.add_response(status_code=404, url="http://localhost:9000/books/13501")
+
+
+def _user_review_put_successful(httpx_mock):
+    httpx_mock.add_response(status_code=200, url=f"http://localhost:9000/users/1/reviews/13501")
+
+
+def _user_review_doesnt_exist(httpx_mock):
+    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="http://localhost:9000/users/1/book-ids")
 
 
 def _stub_user_review_service(user_review_service):
