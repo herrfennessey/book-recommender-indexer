@@ -63,6 +63,7 @@ class TaskClient(object):
         parent = self.client.queue_path(self.properties.gcp_project_name, self.properties.cloud_task_region,
                                         self.properties.book_task_queue)
         response = self.client.create_task(parent=parent, task=task.dict())
+        logging.info("Created task for book: {}".format(book_id))
         return response.name
 
 
