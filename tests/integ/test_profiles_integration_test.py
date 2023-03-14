@@ -78,6 +78,21 @@ def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: Tes
     assert_that(cloud_tasks.get_task(name=response.json().get("task_name"))).is_not_none()
 
 
+def test_handle_endpoint_logs_error_but_suppresses_exception(test_client: TestClient, caplog: LogCaptureFixture):
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _invalid_base_64_object()
+
+    response = test_client.post("/pubsub/profiles/handle", json=message)
+
+    assert_that(caplog.text).contains("Uncaught Exception", "Incorrect padding", _invalid_base_64_object())
+    assert_that(response.status_code).is_equal_to(200)
+
+
+def _invalid_base_64_object():
+    # incorrectly padded base 64 object - should throw a gnarly error
+    return "ABHPdSaxrhjAWA="
+
+
 def _an_example_pubsub_post_call():
     return {
         "message": {
