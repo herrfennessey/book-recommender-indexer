@@ -67,3 +67,7 @@ class PubSubUserReviewV1(BaseModel):
     @validator("date_read", "scrape_time", pre=True)
     def parse_datetime_fields(cls, publish_date):
         return parse(publish_date)
+
+
+class PubSubProfileV1(BaseModel):
+    user_id: str

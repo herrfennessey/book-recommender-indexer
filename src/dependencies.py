@@ -10,4 +10,4 @@ class Properties(BaseSettings):
     pubsub_book_topic_name: str = "test-topic"
     pubsub_user_review_topic_name: str = "test-topic"
     cloud_task_region: str = "here"
-    book_task_queue: str = "test-book-queue"
+    task_queue_name: str = "test-queue"

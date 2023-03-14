@@ -20,7 +20,7 @@ class CloudTasksContainer(DockerContainer):
         self.port = port
         self.with_exposed_ports(self.port)
         self.with_command(
-            f'-host 0.0.0.0 -port {self.port} -queue "projects/test-project/locations/here/queues/test-book-queue"'
+            f'-host 0.0.0.0 -port {self.port} -queue "projects/test-project/locations/here/queues/test-queue"'
         )
 
     def get_client(self):
