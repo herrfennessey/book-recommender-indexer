@@ -141,6 +141,27 @@ def test_user_review_doesnt_exist_book_doesnt_exist(httpx_mock, test_client: Tes
     assert_that(cloud_tasks.get_task(name=response.json().get("scraped_book_task"))).is_not_none()
 
 
+def test_user_review_doesnt_exist_but_put_fails_halts_processing(httpx_mock, test_client: TestClient,
+                                                                 caplog: LogCaptureFixture,
+                                                                 cloud_tasks: CloudTasksClient):
+    # Given
+    _user_review_doesnt_exist(httpx_mock)
+    _user_review_put_failed(httpx_mock)
+
+    caplog.set_level(logging.ERROR, logger="user_review_service")
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _a_base_64_encoded_user_review()
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(caplog.text).contains("Received 4xx response from API - Failed to index user review")
+    assert_that(response.json().get("index_review")).is_none()
+    assert_that(response.json().get("scraped_book_task")).is_none()
+
+
 def _user_review_exists(httpx_mock):
     httpx_mock.add_response(json={"book_ids": [13501]}, status_code=200, url="http://localhost:9000/users/1/book-ids")
 
@@ -155,6 +176,10 @@ def _book_doesnt_exist(httpx_mock):
 
 def _user_review_put_successful(httpx_mock):
     httpx_mock.add_response(status_code=200, url=f"http://localhost:9000/users/1/reviews/13501")
+
+
+def _user_review_put_failed(httpx_mock):
+    httpx_mock.add_response(status_code=422, url=f"http://localhost:9000/users/1/reviews/13501")
 
 
 def _user_review_doesnt_exist(httpx_mock):

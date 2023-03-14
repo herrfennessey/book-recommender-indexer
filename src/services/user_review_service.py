@@ -32,6 +32,7 @@ class UserReviewService(object):
                 response.indexed_review = True
             except BookRecommenderApiClientException as e:
                 logger.error("Received 4xx response from API - Failed to index user review: {}".format(e))
+                return response
             # We intentionally allow 5xx and uncaught exceptions to bubble up to the caller
         else:
             logger.info("User review already indexed for user_id: {} and book_id: {}".format(
