@@ -55,9 +55,9 @@ async def handle_pubsub_message(
         try:
             await client.create_book(book_info.dict())
         except BookRecommenderApiClientException as e:
-            logging.error("Book Recommender API thinks the payload was malformed %s - exception: %s", json_payload, e)
+            logging.error("API returned 4xx exception when called with payload %s - exception: %s", json_payload, e)
         except BookRecommenderApiServerException as e:
-            logging.error("HTTP Exception occurred when calling Book Recommender API - error: %s", e)
+            logging.error("API returned 5xx Exception when called with payload %s - exception: %s", json_payload, e)
             return Response(status_code=HTTP_500_INTERNAL_SERVER_ERROR)
 
     except JSONDecodeError as _:

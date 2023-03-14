@@ -34,9 +34,9 @@ def test_handle_endpoint_rejects_malformed_requests(test_client: TestClient):
     assert_that(response.status_code).is_equal_to(422)
 
 
-def test_book_recommender_client_error_handled(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
+def test_book_recommender_client_error_suppressed(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
-    httpx_mock.add_response(status_code=422, url="http://localhost:9000/books/4", method="PUT")
+    _put_call_receives_4xx(httpx_mock)
     caplog.set_level(logging.ERROR, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _a_base_64_encoded_book()
@@ -46,11 +46,12 @@ def test_book_recommender_client_error_handled(httpx_mock, test_client: TestClie
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Book Recommender API thinks the payload was malformed")
+    assert_that(caplog.text).contains("API returned 4xx exception when called with payload")
 
 
-def test_book_recommender_server_error_handled(test_client: TestClient, caplog: LogCaptureFixture):
+def test_book_recommender_server_error_propagates(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
+    _put_call_receives_5xx(httpx_mock)
     caplog.set_level(logging.ERROR, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _a_base_64_encoded_book()
@@ -60,7 +61,7 @@ def test_book_recommender_server_error_handled(test_client: TestClient, caplog: 
 
     # Then
     assert_that(response.status_code).is_equal_to(500)
-    assert_that(caplog.text).contains("HTTP Exception occurred when calling Book Recommender API")
+    assert_that(caplog.text).contains("API returned 5xx Exception when called with payload")
 
 
 def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
@@ -90,9 +91,9 @@ def test_well_formed_request_but_not_a_valid_book_returns_200(test_client: TestC
     assert_that(caplog.text).contains("Error converting payload into book object")
 
 
-def test_well_formed_request_returns_200(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
+def test_successful_book_write(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
-    httpx_mock.add_response(status_code=200, url="http://localhost:9000/books/4", method="PUT")
+    _put_call_is_successful(httpx_mock)
     caplog.set_level(logging.INFO, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _a_base_64_encoded_book()
@@ -103,6 +104,18 @@ def test_well_formed_request_returns_200(httpx_mock, test_client: TestClient, ca
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(caplog.text).contains("Successfully wrote book: 4")
+
+
+def _put_call_is_successful(httpx_mock):
+    httpx_mock.add_response(status_code=200, url="http://localhost:9000/books/4", method="PUT")
+
+
+def _put_call_receives_4xx(httpx_mock):
+    httpx_mock.add_response(status_code=422, url="http://localhost:9000/books/4", method="PUT")
+
+
+def _put_call_receives_5xx(httpx_mock):
+    httpx_mock.add_response(status_code=500, url="http://localhost:9000/books/4", method="PUT")
 
 
 def _an_example_pubsub_post_call():

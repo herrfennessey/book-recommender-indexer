@@ -10,6 +10,7 @@ from assertpy import assert_that
 from fastapi.testclient import TestClient
 from google.cloud.tasks_v2 import CloudTasksClient
 
+from src.clients.book_recommender_api_client import BookRecommenderApiServerException
 from src.main import app
 from src.services.user_review_service import get_user_review_service
 
@@ -141,12 +142,12 @@ def test_user_review_doesnt_exist_book_doesnt_exist(httpx_mock, test_client: Tes
     assert_that(cloud_tasks.get_task(name=response.json().get("scraped_book_task"))).is_not_none()
 
 
-def test_user_review_doesnt_exist_but_put_fails_halts_processing(httpx_mock, test_client: TestClient,
-                                                                 caplog: LogCaptureFixture,
-                                                                 cloud_tasks: CloudTasksClient):
+def test_user_review_doesnt_exist_but_put_receives_client_error_handled_gracefully(httpx_mock, test_client: TestClient,
+                                                                                   caplog: LogCaptureFixture,
+                                                                                   cloud_tasks: CloudTasksClient):
     # Given
     _user_review_doesnt_exist(httpx_mock)
-    _user_review_put_failed(httpx_mock)
+    _user_review_put_gets_client_error(httpx_mock)
 
     caplog.set_level(logging.ERROR, logger="user_review_service")
     message = _an_example_pubsub_post_call()
@@ -162,8 +163,68 @@ def test_user_review_doesnt_exist_but_put_fails_halts_processing(httpx_mock, tes
     assert_that(response.json().get("scraped_book_task")).is_none()
 
 
+def test_user_review_doesnt_exist_put_receives_server_error_propagates_exception_back(httpx_mock,
+                                                                                      test_client: TestClient,
+                                                                                      caplog: LogCaptureFixture,
+                                                                                      cloud_tasks: CloudTasksClient):
+    # Given
+    _user_review_doesnt_exist(httpx_mock)
+    _user_review_put_gets_server_error(httpx_mock)
+
+    caplog.set_level(logging.ERROR, logger="user_review_service")
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _a_base_64_encoded_user_review()
+
+    # When
+    with pytest.raises(BookRecommenderApiServerException):
+        response = test_client.post("/pubsub/user-reviews/handle", json=message)
+        assert response.status_code == 500
+
+
+def test_book_existence_check_throwing_500_propagates_error_upward(httpx_mock,
+                                                                   test_client: TestClient,
+                                                                   caplog: LogCaptureFixture,
+                                                                   cloud_tasks: CloudTasksClient):
+    # Given
+    _user_review_doesnt_exist(httpx_mock)
+    _user_review_put_successful(httpx_mock)
+    _book_existence_check_throws_server_error(httpx_mock)
+
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _a_base_64_encoded_user_review()
+
+    # When
+    with pytest.raises(BookRecommenderApiServerException):
+        response = test_client.post("/pubsub/user-reviews/handle", json=message)
+        assert response.status_code == 500
+
+
+def test_user_review_existence_check_throwing_500_propagates_error_upward(httpx_mock,
+                                                                          test_client: TestClient,
+                                                                          caplog: LogCaptureFixture,
+                                                                          cloud_tasks: CloudTasksClient):
+    # Given
+    _user_review_existence_check_throws_server_error(httpx_mock)
+
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _a_base_64_encoded_user_review()
+
+    # When
+    with pytest.raises(BookRecommenderApiServerException):
+        response = test_client.post("/pubsub/user-reviews/handle", json=message)
+        assert response.status_code == 500
+
+
 def _user_review_exists(httpx_mock):
     httpx_mock.add_response(json={"book_ids": [13501]}, status_code=200, url="http://localhost:9000/users/1/book-ids")
+
+
+def _user_review_doesnt_exist(httpx_mock):
+    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="http://localhost:9000/users/1/book-ids")
+
+
+def _user_review_existence_check_throws_server_error(httpx_mock):
+    httpx_mock.add_response(status_code=500, url="http://localhost:9000/users/1/book-ids")
 
 
 def _book_exists(httpx_mock):
@@ -174,16 +235,20 @@ def _book_doesnt_exist(httpx_mock):
     httpx_mock.add_response(status_code=404, url="http://localhost:9000/books/13501")
 
 
+def _book_existence_check_throws_server_error(httpx_mock):
+    httpx_mock.add_response(status_code=500, url="http://localhost:9000/books/13501")
+
+
 def _user_review_put_successful(httpx_mock):
     httpx_mock.add_response(status_code=200, url=f"http://localhost:9000/users/1/reviews/13501")
 
 
-def _user_review_put_failed(httpx_mock):
+def _user_review_put_gets_client_error(httpx_mock):
     httpx_mock.add_response(status_code=422, url=f"http://localhost:9000/users/1/reviews/13501")
 
 
-def _user_review_doesnt_exist(httpx_mock):
-    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="http://localhost:9000/users/1/book-ids")
+def _user_review_put_gets_server_error(httpx_mock):
+    httpx_mock.add_response(status_code=500, url=f"http://localhost:9000/users/1/reviews/13501")
 
 
 def _stub_user_review_service(user_review_service):
