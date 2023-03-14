@@ -23,7 +23,17 @@ def test_handle_endpoint_doesnt_allow_gets(test_client: TestClient):
     assert_that(response.status_code).is_equal_to(405)
 
 
-def test_handle_endpoint_rejects_malformed_requests(test_client: TestClient):
+def test_handle_endpoint_logs_error_but_suppresses_exception(test_client: TestClient, caplog: LogCaptureFixture):
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _invalid_base_64_object()
+
+    response = test_client.post("/pubsub/books/handle", json=message)
+
+    assert_that(caplog.text).contains("Uncaught Exception", "Incorrect padding", _invalid_base_64_object())
+    assert_that(response.status_code).is_equal_to(200)
+
+
+def test_handle_endpoint_rejects_non_book_objects(test_client: TestClient):
     # Given
     request = {"malformed_request": 123}
 
@@ -126,6 +136,11 @@ def _an_example_pubsub_post_call():
             "publish_time": "2021-02-26T19:13:55.749Z"},
         "subscription": "projects/myproject/subscriptions/mysubscription"
     }
+
+
+def _invalid_base_64_object():
+    # incorrectly padded base 64 object - should throw a gnarly error
+    return "ABHPdSaxrhjAWA="
 
 
 def _a_base_64_encoded_random_json_object():

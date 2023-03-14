@@ -65,7 +65,7 @@ async def handle_pubsub_message(
     except ValidationError as e:
         logging.error("Error converting payload into book object. Received: %s Error: %s", json_payload, e)
     except Exception as e:
-        logging.error("Uncaught Exception while handling pubsub message. Error: %s", e)
+        logging.error("Uncaught Exception while handling pubsub message. Exception: %s. Message: %s", e, request.dict())
 
     # We need to return 200 to pubsub, otherwise it will retry
     return Response(status_code=HTTP_200_OK)
