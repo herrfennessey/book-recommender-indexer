@@ -53,6 +53,7 @@ async def handle_pubsub_message(
         payload = base64.b64decode(request.message.data).decode("utf-8")
         json_payload = json.loads(payload)
         profile = PubSubProfileV1(**json_payload)
+        logging.info("Attempting to enqueue profile %s", profile.user_id)
         response.task_name = task_client.enqueue_user_scrape(profile.user_id)
     except JSONDecodeError as _:
         logging.error("Payload was not in JSON - received %s", payload)
