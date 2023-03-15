@@ -21,7 +21,6 @@ def test_read_main(test_client: TestClient):
     assert response.json() == {"status": "Ready to Rock!"}
 
 
-@pytest.mark.asyncio
 def test_health_check_with_both_services_healthy(httpx_mock, test_client: TestClient):
     # Given
     properties = Properties()
@@ -35,9 +34,9 @@ def test_health_check_with_both_services_healthy(httpx_mock, test_client: TestCl
     # Then
     assert response.status_code == 200
     assert response.json() == {"status": "Healthy"}
+    app.dependency_overrides.pop(get_properties, None)
 
 
-@pytest.mark.asyncio
 def test_health_check_with_recommendation_api_unhealthy(httpx_mock, test_client: TestClient):
     # Given
     properties = Properties()
@@ -50,9 +49,9 @@ def test_health_check_with_recommendation_api_unhealthy(httpx_mock, test_client:
     # Then
     assert response.json() == {"status": "Not Healthy"}
     assert response.status_code == 500
+    app.dependency_overrides.pop(get_properties, None)
 
 
-@pytest.mark.asyncio
 def test_health_check_with_task_client_unhealthy(httpx_mock, test_client: TestClient):
     # Given
     properties = Properties()
@@ -67,3 +66,4 @@ def test_health_check_with_task_client_unhealthy(httpx_mock, test_client: TestCl
     # Then
     assert response.json() == {"status": "Not Healthy"}
     assert response.status_code == 500
+    app.dependency_overrides.pop(get_properties, None)
