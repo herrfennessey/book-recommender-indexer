@@ -24,6 +24,17 @@ class BookRecommenderApiClient(object):
         self.user_read_books_cache = user_read_books_cache
         self.book_exists_cache = book_exists_cache
 
+    async def is_ready(self):
+        url = f"{self.base_url}/"
+        try:
+            response = httpx.get(url)
+            if not response.is_error:
+                return True
+        except Exception as e:
+            logger.error("Could not reach Book Recommender API for readiness check: {}".format(e))
+
+        return False
+
     async def create_book(self, book_dict: Dict[str, Any]):
         book_id = book_dict.get("book_id")
         book = BookV1ApiRequest(**book_dict)
