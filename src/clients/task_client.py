@@ -58,7 +58,8 @@ class TaskClient(object):
 
     def is_ready(self) -> bool:
         # This is kind of like the parent "folder" that you can run the list_queues command on
-        location_path = self.client.common_location_path(self.properties.gcp_project_name,self.properties.cloud_task_region)
+        location_path = self.client.common_location_path(self.properties.gcp_project_name,
+                                                         self.properties.cloud_task_region)
 
         # This is the actual queue path we expect to find in there
         queue_path = self.client.queue_path(self.properties.gcp_project_name, self.properties.cloud_task_region,
