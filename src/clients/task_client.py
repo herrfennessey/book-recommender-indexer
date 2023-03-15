@@ -56,6 +56,16 @@ class TaskClient(object):
         self.properties = properties
         self.client = client
 
+    def is_ready(self) -> bool:
+        queue_path = self.client.queue_path(self.properties.gcp_project_name, self.properties.cloud_task_region,
+                                            self.properties.task_queue_name)
+        queue_generator = self.client.list_queues(parent=queue_path)
+        # We want to make sure our queue exists before we start sending stuff to it
+        for queue in queue_generator:
+            if queue.name == queue_path:
+                return True
+        return False
+
     def enqueue_book(self, book_id: int) -> str:
         book_scrape_request = ScrapeRequest(spider_name=BOOK_SPIDER_NAME,
                                             crawl_args=BookScrapeRequestArgs(books=book_id,

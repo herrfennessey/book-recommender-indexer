@@ -4,7 +4,7 @@ import logging.config
 import uuid
 from os import path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.exception_handlers import (
     http_exception_handler,
 )
@@ -13,6 +13,8 @@ from fastapi.responses import JSONResponse
 from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
+from src.clients.task_client import TaskClient, get_task_client
 from src.routes import pubsub_books, pubsub_user_reviews, pubsub_profiles
 
 # setup loggers to display more information
@@ -47,6 +49,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         content=content, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
     )
+
+
+@app.get("/health", tags=["healthcheck"])
+async def welcome(task_client: TaskClient = Depends(get_task_client),
+                  book_api_client: BookRecommenderApiClient = Depends(get_book_recommender_api_client)):
+    book_health_status = await book_api_client.is_ready()
+    task_client_health_status = task_client.is_ready()
+    if book_health_status and task_client_health_status:
+        return JSONResponse({"status": "Healthy"}, status_code=200)
+    else:
+        return JSONResponse({"status": "Not Healthy"}, status_code=500)
 
 
 app.include_router(pubsub_books.router)
