@@ -1,7 +1,5 @@
 # book-recommender-indexer
 
-
-
 This is where the business logic of the scraping infrastructure lives. It will receive messages on multiple pubsub
 topics, such as users to crawl, books to crawl, etc. It has debouncing logic built in to where it will try and avoid
 redundant operations, such as crawling a book we already have a copy of.
