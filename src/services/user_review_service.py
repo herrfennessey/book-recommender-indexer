@@ -41,6 +41,7 @@ class UserReviewService(object):
         # If this is a new book, we should also trigger a background task to scrape it, but the user shouldn't wait
         book_exists = await self.book_recommender_api_client.does_book_exist(book_id)
         if not book_exists:
+            logging.info("Attempting to enqueue book_id: %s", book_id)
             response.task_name = self.task_client.enqueue_book(book_id)
         return response
 
