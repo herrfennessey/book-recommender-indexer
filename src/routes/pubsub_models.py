@@ -75,3 +75,8 @@ class PubSubProfileV1(BaseModel):
 
 class PubSubItemBatch(BaseModel):
     items: List[Dict[str, Any]]
+
+
+class IndexerResponse(BaseModel):
+    indexed: int = 0
+    tasks: List[str] = list()

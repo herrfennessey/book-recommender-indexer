@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from pydantic import ValidationError, BaseModel
 
 from src.clients.task_client import get_task_client, TaskClient
-from src.routes.pubsub_models import PubSubMessage, PubSubProfileV1
+from src.routes.pubsub_models import PubSubMessage, PubSubProfileV1, IndexerResponse
 from src.routes.pubsub_utils import _unpack_envelope
 
 logger = logging.getLogger(__name__)
@@ -28,15 +28,11 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 """
 
 
-class ProfileScrapeResponse(BaseModel):
-    tasks: List[str] = list()
-
-
 @router.post("/handle", tags=["profiles"], status_code=200)
 async def handle_pubsub_message(
         request: PubSubMessage,
         task_client: TaskClient = Depends(get_task_client)
-) -> ProfileScrapeResponse:
+) -> IndexerResponse:
     """
     Handle a pubsub POST call. We do not use the actual pubsub library, but instead receive the message
     payload via a POST call. This is because we're badasses. We don't need no stinkin' libraries.
@@ -44,7 +40,7 @@ async def handle_pubsub_message(
     Malformed messages will automatically get a 422 response from fastapi. However, if the message is well
     formed, but doesn't follow our model, we "ack" it with a 200, but discard the bad payload
     """
-    response = ProfileScrapeResponse()
+    response = IndexerResponse()
     tasks = []
 
     profile_batch = _unpack_envelope(request)
