@@ -51,7 +51,7 @@ def test_well_formed_request_but_not_a_valid_profile_returns_200(test_client: Te
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Error converting profile into PubSubProfileV1 object")
+    assert_that(caplog.text).contains("Error converting item into PubSubProfileV1 object")
 
 
 def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,

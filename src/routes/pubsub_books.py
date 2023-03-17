@@ -51,7 +51,7 @@ async def handle_pubsub_message(
             try:
                 serialized_book = PubSubBookV1(**book)
             except ValidationError as e:
-                logging.error("Error converting profile into PubSubBookV1 object. Received: %s Error: %s", book, e)
+                logging.error("Error converting item into PubSubBookV1 object. Received: %s Error: %s", book, e)
                 continue
 
             await client.create_book(serialized_book.dict())

@@ -48,7 +48,7 @@ async def handle_pubsub_message(
         try:
             serialized_profile = PubSubProfileV1(**profile)
         except ValidationError as e:
-            logging.error("Error converting profile into PubSubProfileV1 object. Received: %s Error: %s", profile, e)
+            logging.error("Error converting item into PubSubProfileV1 object. Received: %s Error: %s", profile, e)
             continue
         logging.info("Attempting to enqueue profile: %s", serialized_profile.user_id)
         task_name = task_client.enqueue_user_scrape(serialized_profile.user_id)
