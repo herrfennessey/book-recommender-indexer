@@ -9,6 +9,8 @@ from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
 from fastapi.testclient import TestClient
 
+from tests.integ.integ_utils import _base_64_encode
+
 file_root_path = Path(os.path.dirname(__file__))
 
 
@@ -21,16 +23,6 @@ def non_mocked_hosts() -> list:
 def test_handle_endpoint_doesnt_allow_gets(test_client: TestClient):
     response = test_client.get("/pubsub/books/handle")
     assert_that(response.status_code).is_equal_to(405)
-
-
-def test_handle_endpoint_logs_error_but_suppresses_exception(test_client: TestClient, caplog: LogCaptureFixture):
-    message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _invalid_base_64_object()
-
-    response = test_client.post("/pubsub/books/handle", json=message)
-
-    assert_that(caplog.text).contains("Uncaught Exception", "Incorrect padding", _invalid_base_64_object())
-    assert_that(response.status_code).is_equal_to(200)
 
 
 def test_handle_endpoint_rejects_non_book_objects(test_client: TestClient):
@@ -49,7 +41,8 @@ def test_book_recommender_client_error_suppressed(httpx_mock, test_client: TestC
     _put_call_receives_4xx(httpx_mock)
     caplog.set_level(logging.ERROR, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _a_base_64_encoded_book()
+    payload = {"items": (_get_book_in_json())}
+    message["message"]["data"] = _get_book_in_json()
 
     # When
     response = test_client.post("/pubsub/books/handle", json=message)
@@ -64,7 +57,7 @@ def test_book_recommender_server_error_propagates(httpx_mock, test_client: TestC
     _put_call_receives_5xx(httpx_mock)
     caplog.set_level(logging.ERROR, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _a_base_64_encoded_book()
+    message["message"]["data"] = _get_book_in_json()
 
     # When
     response = test_client.post("/pubsub/books/handle", json=message)
@@ -72,19 +65,6 @@ def test_book_recommender_server_error_propagates(httpx_mock, test_client: TestC
     # Then
     assert_that(response.status_code).is_equal_to(500)
     assert_that(caplog.text).contains("API returned 5xx Exception when called with payload")
-
-
-def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
-    # Given
-    caplog.set_level(logging.ERROR, logger="pubsub_books")
-    message = _an_example_pubsub_post_call()
-
-    # When
-    response = test_client.post("/pubsub/books/handle", json=message)
-
-    # Then
-    assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Payload was not in JSON")
 
 
 def test_well_formed_request_but_not_a_valid_book_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
@@ -106,7 +86,7 @@ def test_successful_book_write(httpx_mock, test_client: TestClient, caplog: LogC
     _put_call_is_successful(httpx_mock)
     caplog.set_level(logging.INFO, logger="pubsub_books")
     message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _a_base_64_encoded_book()
+    message["message"]["data"] = _get_book_in_json()
 
     # When
     response = test_client.post("/pubsub/books/handle", json=message)
@@ -138,21 +118,7 @@ def _an_example_pubsub_post_call():
     }
 
 
-def _invalid_base_64_object():
-    # incorrectly padded base 64 object - should throw a gnarly error
-    return "ABHPdSaxrhjAWA="
-
-
-def _a_base_64_encoded_random_json_object():
-    random_json = {"random": "json"}
-    doc_bytes = json.dumps(random_json).encode("utf-8")
-    doc_encoded = base64.b64encode(doc_bytes)
-    return str(doc_encoded, 'utf-8')
-
-
-def _a_base_64_encoded_book():
-    with open(file_root_path.parents[0] / "resources/harry_potter.json", "r") as f:
+def _get_book_in_json():
+    with open(file_root_path.parents[0] / "resources/harry_potter.input_json", "r") as f:
         doc = json.load(f)
-        doc_bytes = json.dumps(doc).encode("utf-8")
-        doc_encoded = base64.b64encode(doc_bytes)
-        return str(doc_encoded, 'utf-8')
+        return doc

@@ -1,16 +1,14 @@
-import base64
-import json
 import logging
-from json import JSONDecodeError
 
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 from starlette.responses import Response
-from starlette.status import HTTP_200_OK, HTTP_500_INTERNAL_SERVER_ERROR
+from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
     BookRecommenderApiClientException, BookRecommenderApiServerException
-from src.routes.pubsub_models import PubSubMessage, PubSubBookV1
+from src.routes.pubsub_models import PubSubMessage, IndexerResponse, PubSubBookV1
+from src.routes.pubsub_utils import _unpack_envelope
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pubsub/books")
@@ -44,28 +42,25 @@ async def handle_pubsub_message(
     Malformed messages will automatically get a 422 response from fastapi. However, if the message is well
     formed, but doesn't follow our model, we "ack" it with a 200, but discard the bad payload
     """
-    logging.debug("Handling message with ID %s - Publish Time %s - Attributes %s", request.message.message_id,
-                  request.message.publish_time, request.message.attributes)
+    indexed = 0
+    batch = _unpack_envelope(request)
+
+    # We have a valid book batch, so let's send it to the book recommender API
     try:
-        payload = base64.b64decode(request.message.data).decode("utf-8")
-        json_payload = json.loads(payload)
-        book_info = PubSubBookV1(**json_payload)
+        for book in batch.items:
+            try:
+                serialized_book = PubSubBookV1(**book)
+            except ValidationError as e:
+                logging.error("Error converting profile into PubSubBookV1 object. Received: %s Error: %s", book, e)
+                continue
 
-        # We have a valid book, so let's send it to the book recommender API
-        try:
-            await client.create_book(book_info.dict())
-        except BookRecommenderApiClientException as e:
-            logging.error("API returned 4xx exception when called with payload %s - exception: %s", json_payload, e)
-        except BookRecommenderApiServerException as e:
-            logging.error("API returned 5xx Exception when called with payload %s - exception: %s", json_payload, e)
-            return Response(status_code=HTTP_500_INTERNAL_SERVER_ERROR)
-
-    except JSONDecodeError as _:
-        logging.error("Payload was not in JSON - received %s", payload)
-    except ValidationError as e:
-        logging.error("Error converting payload into book object. Received: %s Error: %s", json_payload, e)
-    except Exception as e:
-        logging.error("Uncaught Exception while handling pubsub message. Exception: %s. Message: %s", e, request.dict())
+            await client.create_book(serialized_book.dict())
+            indexed += 1
+    except BookRecommenderApiClientException as e:
+        logging.error("API returned 4xx exception when called with payload %s - exception: %s", serialized_book, e)
+    except BookRecommenderApiServerException as e:
+        logging.error("API returned 5xx Exception when called with payload %s - exception: %s", serialized_book, e)
+        return Response(status_code=HTTP_500_INTERNAL_SERVER_ERROR)
 
     # We need to return 200 to pubsub, otherwise it will retry
-    return Response(status_code=HTTP_200_OK)
+    return IndexerResponse(indexed=indexed)

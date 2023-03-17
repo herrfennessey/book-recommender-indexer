@@ -1,16 +1,16 @@
-import base64
 import json
 import logging
 import os
 import random
 from pathlib import Path
-from typing import Dict, Any, List
 
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
 from fastapi.testclient import TestClient
 from google.cloud.tasks_v2 import CloudTasksClient
+
+from tests.integ.integ_utils import _base_64_encode
 
 file_root_path = Path(os.path.dirname(__file__))
 
@@ -41,8 +41,10 @@ def test_well_formed_request_but_not_a_valid_profile_returns_200(test_client: Te
                                                                  caplog: LogCaptureFixture):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
+    profile_batch = json.dumps({"items": [{"not_a_profile": "123"}]})
+
     message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _base_64_encode({"items": [{"not_a_profile": "123"}]})
+    message["message"]["data"] = _base_64_encode(profile_batch)
 
     # When
     response = test_client.post("/pubsub/profiles/handle", json=message)
@@ -56,11 +58,13 @@ def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: Tes
                                                     cloud_tasks: CloudTasksClient):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
-    message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _base_64_encode({"items": [_a_random_profile_item() for _ in range(0, 10)]})
+    profile_batch = json.dumps({"items": [_a_random_profile_item() for _ in range(0, 10)]})
+
+    pub_sub_message = _an_example_pubsub_post_call()
+    pub_sub_message["message"]["data"] = _base_64_encode(profile_batch)
 
     # When
-    response = test_client.post("/pubsub/profiles/handle", json=message)
+    response = test_client.post("/pubsub/profiles/handle", json=pub_sub_message)
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
@@ -69,14 +73,15 @@ def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: Tes
 
 
 def test_one_bad_profile_doesnt_spoil_the_batch(test_client: TestClient, caplog: LogCaptureFixture,
-                                                  cloud_tasks: CloudTasksClient):
+                                                cloud_tasks: CloudTasksClient):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
     message = _an_example_pubsub_post_call()
     items = [_a_random_profile_item() for _ in range(0, 10)]
     items.append({"not_a_profile": 1234})
+    profile_batch = json.dumps({"items": items})
 
-    message["message"]["data"] = _base_64_encode({"items": items})
+    message["message"]["data"] = _base_64_encode(profile_batch)
 
     # When
     response = test_client.post("/pubsub/profiles/handle", json=message)
@@ -84,6 +89,7 @@ def test_one_bad_profile_doesnt_spoil_the_batch(test_client: TestClient, caplog:
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(response.json().get("tasks")).is_length(10)
+
 
 def _an_example_pubsub_post_call():
     return {
@@ -93,19 +99,6 @@ def _an_example_pubsub_post_call():
             "publish_time": "2021-02-26T19:13:55.749Z"},
         "subscription": "projects/myproject/subscriptions/mysubscription"
     }
-
-
-def _a_base_64_encoded_random_json_object():
-    random_json = {"random": "json"}
-    doc_bytes = json.dumps(random_json).encode("utf-8")
-    doc_encoded = base64.b64encode(doc_bytes)
-    return str(doc_encoded, 'utf-8')
-
-
-def _base_64_encode(profile_list: Dict[str, Any]):
-    doc_bytes = json.dumps(profile_list).encode("utf-8")
-    doc_encoded = base64.b64encode(doc_bytes)
-    return str(doc_encoded, 'utf-8')
 
 
 def _a_random_profile_item():
