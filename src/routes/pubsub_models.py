@@ -71,3 +71,7 @@ class PubSubUserReviewV1(BaseModel):
 
 class PubSubProfileV1(BaseModel):
     user_id: str
+
+
+class PubSubItemBatch(BaseModel):
+    items: List[Dict[str, Any]]

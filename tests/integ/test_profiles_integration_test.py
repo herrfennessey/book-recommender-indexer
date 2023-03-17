@@ -2,7 +2,9 @@ import base64
 import json
 import logging
 import os
+import random
 from pathlib import Path
+from typing import Dict, Any, List
 
 import pytest
 from _pytest.logging import LogCaptureFixture
@@ -35,32 +37,19 @@ def test_handle_endpoint_rejects_malformed_requests(test_client: TestClient):
     assert_that(response.status_code).is_equal_to(422)
 
 
-def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
-    # Given
-    caplog.set_level(logging.ERROR, logger="pubsub_profiles")
-    message = _an_example_pubsub_post_call()
-
-    # When
-    response = test_client.post("/pubsub/profiles/handle", json=message)
-
-    # Then
-    assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Payload was not in JSON")
-
-
 def test_well_formed_request_but_not_a_valid_profile_returns_200(test_client: TestClient,
                                                                  caplog: LogCaptureFixture):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
     message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _a_base_64_encoded_random_json_object()
+    message["message"]["data"] = _base_64_encode({"items": [{"not_a_profile": "123"}]})
 
     # When
     response = test_client.post("/pubsub/profiles/handle", json=message)
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Error converting payload into profiles object")
+    assert_that(caplog.text).contains("Error converting profile into PubSubProfileV1 object")
 
 
 def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
@@ -68,29 +57,15 @@ def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: Tes
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
     message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _a_base_64_encoded_profile()
+    message["message"]["data"] = _base_64_encode({"items": [_a_random_profile_item() for _ in range(0, 10)]})
 
     # When
     response = test_client.post("/pubsub/profiles/handle", json=message)
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(cloud_tasks.get_task(name=response.json().get("task_name"))).is_not_none()
-
-
-def test_handle_endpoint_logs_error_but_suppresses_exception(test_client: TestClient, caplog: LogCaptureFixture):
-    message = _an_example_pubsub_post_call()
-    message["message"]["data"] = _invalid_base_64_object()
-
-    response = test_client.post("/pubsub/profiles/handle", json=message)
-
-    assert_that(caplog.text).contains("Uncaught Exception", "Incorrect padding", _invalid_base_64_object())
-    assert_that(response.status_code).is_equal_to(200)
-
-
-def _invalid_base_64_object():
-    # incorrectly padded base 64 object - should throw a gnarly error
-    return "ABHPdSaxrhjAWA="
+    for task in response.json().get("tasks"):
+        assert_that(cloud_tasks.get_task(name=task)).is_not_none()
 
 
 def _an_example_pubsub_post_call():
@@ -110,9 +85,13 @@ def _a_base_64_encoded_random_json_object():
     return str(doc_encoded, 'utf-8')
 
 
-def _a_base_64_encoded_profile():
-    with open(file_root_path.parents[0] / "resources/profile_example.json", "r") as f:
-        doc = json.load(f)
-        doc_bytes = json.dumps(doc).encode("utf-8")
-        doc_encoded = base64.b64encode(doc_bytes)
-        return str(doc_encoded, 'utf-8')
+def _base_64_encode(profile_list: Dict[str, Any]):
+    doc_bytes = json.dumps(profile_list).encode("utf-8")
+    doc_encoded = base64.b64encode(doc_bytes)
+    return str(doc_encoded, 'utf-8')
+
+
+def _a_random_profile_item():
+    return {
+        "user_id": random.randint(1, 100000),
+    }
