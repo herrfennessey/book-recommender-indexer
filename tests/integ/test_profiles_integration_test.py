@@ -68,6 +68,23 @@ def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: Tes
         assert_that(cloud_tasks.get_task(name=task)).is_not_none()
 
 
+def test_one_bad_profile_doesnt_spoil_the_batch(test_client: TestClient, caplog: LogCaptureFixture,
+                                                  cloud_tasks: CloudTasksClient):
+    # Given
+    caplog.set_level(logging.ERROR, logger="pubsub_profiles")
+    message = _an_example_pubsub_post_call()
+    items = [_a_random_profile_item() for _ in range(0, 10)]
+    items.append({"not_a_profile": 1234})
+
+    message["message"]["data"] = _base_64_encode({"items": items})
+
+    # When
+    response = test_client.post("/pubsub/profiles/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(response.json().get("tasks")).is_length(10)
+
 def _an_example_pubsub_post_call():
     return {
         "message": {
