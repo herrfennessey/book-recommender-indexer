@@ -5,8 +5,11 @@ from typing import List, Any, Dict
 import httpx
 from cachetools import TTLCache, LRUCache
 from fastapi import Depends
+from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 
-from src.clients.api_models import BookV1ApiRequest, UserReviewV1ApiRequest
+from src.clients.api_models import BookV1ApiRequest, UserReviewV1BatchRequest, UserReviewBatchResponse, \
+    ApiUserReviewBatchResponse, ApiBookExistsBatchResponse, \
+    ApiBookExistsBatchRequest
 from src.clients.utils.cache_utils import get_user_read_book_cache, get_book_exists_cache
 from src.dependencies import Properties
 
@@ -96,67 +99,67 @@ class BookRecommenderApiClient(object):
         except httpx.HTTPError as e:
             raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
-    async def does_book_exist(self, book_id):
+    async def get_already_indexed_books(self, book_ids: List[int]):
         """
         Function which will query book_recommender_api to see if we have that book indexed already
 
         The cachetools decorator doesn't seem to work with async fastapi stuff, because of how it instantiates fresh
         every single time, so I just do it in the global memory space
-        :param book_id: book_id to check
-        :return: boolean True if book exists, False if not, or it throws an Exception if you're fancy
-        """
-        # LRU cache to cut down on API calls
-        if self.book_exists_cache.get(book_id):
-            logging.info("Cache hit! does_book_exist() book_id: {}".format(book_id))
-            return True
 
-        url = f"{self.base_url}/books/{book_id}"
+        :param book_ids: List of book IDs to check
+        :return: List(int) of book_ids that exist from within your input list
+        """
+        # We can pop all the IDs which already exist from the cache, because that means we have checked them already
+        book_ids_to_query = []
+        for book_id in book_ids:
+            if not self.book_exists_cache.get(book_id):
+                book_ids_to_query.append(book_id)
+
+        url = f"{self.base_url}/books/batch/exists"
         try:
-            response = httpx.get(url)
+            response = httpx.post(url, json=ApiBookExistsBatchRequest(book_ids=book_ids_to_query))
             if not response.is_error:
-                # Set LRU Cache, so we don't have to hit the API again
-                self.book_exists_cache[book_id] = True
-                return True
+                book_ids_that_exist = ApiBookExistsBatchResponse(**response.json()).book_ids
+                for book_id in book_ids_that_exist:
+                    self.book_exists_cache[book_id] = True
+                return book_ids_that_exist
             elif response.is_client_error:
-                logger.info("Received 4xx response. assuming book_id: {} does not exist. URL: {} ".format(book_id, url))
-                return False
+                logger.error(
+                    "Received 4xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,
+                                                                                                   book_ids_to_query))
+                raise BookRecommenderApiClientException(
+                    "4xx Exception encountered {} for book_ids: {}".format(response.text, book_ids_to_query))
             elif response.is_server_error:
                 logger.error(
-                    "Received 5xx exception from server with body: {} URL: {} book_id: {}".format(response.text, url,
-                                                                                                  book_id))
+                    "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,
+                                                                                                   book_ids_to_query))
                 raise BookRecommenderApiServerException(
-                    "5xx response encountered for URL {}".format(book_id))
+                    "5xx Exception encountered {} for book_ids: {}".format(response.text, book_ids_to_query))
         except httpx.HTTPError as e:
-            logging.error(
-                "Uncaught Exception: {} encountered for URL: {} for book_id: {}".format(e, url, book_id))
             raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
-    async def create_user_review(self, user_review_dict: Dict[str, Any]):
-        user_id = user_review_dict.get("user_id")
-        book_id = user_review_dict.get("book_id")
-        user_review = UserReviewV1ApiRequest(**user_review_dict)
-        url = f"{self.base_url}/users/{user_id}/reviews/{book_id}"
+    async def create_batch_user_reviews(self, user_review_batch: List[Dict[str, Any]]) -> UserReviewBatchResponse:
+        user_review = UserReviewV1BatchRequest(user_reviews=user_review_batch)
+        url = f"{self.base_url}/users/batch/create"
         try:
-            response = httpx.put(url, json=user_review.dict())
+            response = httpx.post(url, json=user_review.dict())
             if not response.is_error:
-                logger.info("Successfully wrote review for user_id: {} book_id: {}".format(user_id, book_id))
-                return
-            elif response.is_client_error:
-                logger.error(
-                    "Received 4xx exception from server with body: {} URL: {} "
-                    "user_id: {} book_id: {}".format(response.text, url, user_id, book_id))
-                raise BookRecommenderApiClientException(
-                    "4xx Exception encountered {} for user_id: {} book_id: {}".format(response.text, user_id, book_id))
+                # Probably excessive to deserialize and reserialize the same response, but I really don't like digging
+                # in raw JSON by key
+                api_response = ApiUserReviewBatchResponse(**response.json())
+                logger.info("Successfully created batch user reviews. Indexed: {}".format(api_response.indexed))
+                return ClientUserReviewBatchResponse(indexed=api_response.indexed)
+            elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
+                logger.error("Received 429 response code from server. URL: {} ".format(url))
+                raise BookRecommenderApiServerException("Received HTTP_429_TOO_MANY_REQUESTS from server")
             elif response.is_server_error:
                 logger.error(
-                    "Received 5xx exception from server with body: {} URL: {} "
-                    "user_id: {} book_id: {}".format(response.text, url, user_id, book_id))
+                    "Received 5xx exception from server with body: {} URL: {}".format(response.text, url))
                 raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for user_id: {} book_id: {}".format(response.text, user_id, book_id))
+                    "5xx Exception encountered {} for URL: {}".format(response.text, url))
         except httpx.HTTPError as e:
             raise BookRecommenderApiServerException(
-                "HTTP Exception encountered: {} for URL {} "
-                "when creating review for user_id: {} book_id: {}".format(e, url, user_id, book_id))
+                "HTTP Exception encountered: {} for URL {}".format(e, url))
 
 
 class BookRecommenderApiClientException(Exception):

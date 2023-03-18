@@ -104,7 +104,7 @@ async def test_successful_get_books_read(httpx_mock, caplog: LogCaptureFixture,
     httpx_mock.add_response(json={"book_ids": [3, 4, 5]}, status_code=200, url="https://testurl/users/1/book-ids")
 
     # When
-    response = await book_recommender_api_client.get_books_read_by_user(1)
+    response = await book_recommender_api_client.get_already_indexed_books(1)
 
     # Then
     assert_that(response).contains_only(3, 4, 5)
@@ -120,9 +120,9 @@ async def test_cache_prevent_more_than_one_call_to_get_books_read_by_user(httpx_
 
     # When
     for _ in range(0, 10):
-        await book_recommender_api_client.get_books_read_by_user(1)
+        await book_recommender_api_client.get_already_indexed_books(1)
 
-    await book_recommender_api_client.get_books_read_by_user(2)
+    await book_recommender_api_client.get_already_indexed_books(2)
 
     # Then
     assert_that(httpx_mock.get_requests()).is_length(2)
@@ -137,7 +137,7 @@ async def test_4xx_when_getting_books_read_returns_empty_array(httpx_mock, caplo
     httpx_mock.add_response(status_code=404, url="https://testurl/users/1/book-ids")
 
     # When
-    response = await book_recommender_api_client.get_books_read_by_user(1)
+    response = await book_recommender_api_client.get_already_indexed_books(1)
 
     # Then
     assert_that(caplog.text).contains("Received 4xx exception from server", "user_id: 1",
@@ -154,7 +154,7 @@ async def test_4xx_still_gets_cached(httpx_mock, caplog: LogCaptureFixture,
 
     # When
     for _ in range(10):
-        response = await book_recommender_api_client.get_books_read_by_user(1)
+        response = await book_recommender_api_client.get_already_indexed_books(1)
 
     # Then
     assert_that(caplog.text).contains("Received 4xx exception from server", "user_id: 1",
@@ -172,7 +172,7 @@ async def test_5xx_when_getting_books_read_throws_exception(httpx_mock, caplog: 
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.get_books_read_by_user(1)
+        await book_recommender_api_client.get_already_indexed_books(1)
 
     assert_that(caplog.text).contains("Received 5xx exception from server", "user_id: 1",
                                       "https://testurl/users/1/book-ids")
@@ -187,7 +187,7 @@ async def test_unhandled_exceptions_when_getting_books_read_throws_exception(htt
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException) as e:
-        await book_recommender_api_client.get_books_read_by_user(1)
+        await book_recommender_api_client.get_already_indexed_books(1)
 
     assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/users/1/book-ids")
 
@@ -303,7 +303,7 @@ async def test_successful_user_review_creation(httpx_mock, caplog: LogCaptureFix
     review = _a_random_review()
 
     # When
-    await book_recommender_api_client.create_user_review(review)
+    await book_recommender_api_client.create_batch_user_reviews(review)
 
     # Then
     assert_that(caplog.text).contains("Successfully wrote review", "user_id: 1", "book_id: 2")
@@ -319,7 +319,7 @@ async def test_4xx_user_review_creation_throws_exception(httpx_mock, caplog: Log
 
     # When / Then
     with pytest.raises(BookRecommenderApiClientException):
-        await book_recommender_api_client.create_user_review(review)
+        await book_recommender_api_client.create_batch_user_reviews(review)
 
     assert_that(caplog.text).contains("Received 4xx exception from server", "user_id: 1", "book_id: 2",
                                       "https://testurl/users/1/reviews/2")
@@ -335,7 +335,7 @@ async def test_5xx_user_review_creation_throws_exception(httpx_mock, caplog: Log
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.create_user_review(review)
+        await book_recommender_api_client.create_batch_user_reviews(review)
 
     assert_that(caplog.text).contains("Received 5xx exception from server", "user_id: 1", "book_id: 2",
                                       "https://testurl/users/1/reviews/2")
@@ -352,7 +352,7 @@ async def test_unhandled_exceptions_when_creating_user_review_throws_exception(h
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException) as e:
-        await book_recommender_api_client.create_user_review(review)
+        await book_recommender_api_client.create_batch_user_reviews(review)
 
     assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/users/1/reviews/2 ",
                                           "user_id: 1 book_id: 2")
@@ -367,7 +367,7 @@ async def test_successful_user_review_creation(httpx_mock, caplog: LogCaptureFix
     review = _a_random_review()
 
     # When
-    await book_recommender_api_client.create_user_review(review)
+    await book_recommender_api_client.create_batch_user_reviews(review)
 
     # Then
     assert_that(caplog.text).contains("Successfully wrote review", "user_id: 1", "book_id: 2")

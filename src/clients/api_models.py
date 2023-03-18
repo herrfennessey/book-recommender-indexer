@@ -41,11 +41,29 @@ class BookV1ApiRequest(BaseModel):
             return str(input_datetime)
 
 
-class UserReviewV1ApiRequest(BaseModel):
+class UserReviewV1BatchItem(BaseModel):
+    user_id: int
+    book_id: int
     user_rating: int
     date_read: str
     scrape_time: str
 
-    @validator("date_read", "scrape_time", pre=True)
-    def convert_date_read_to_string(cls, input_datetime):
-        return str(input_datetime.isoformat())
+
+class UserReviewV1BatchRequest(BaseModel):
+    user_reviews: List[UserReviewV1BatchItem]
+
+
+class ApiBookExistsBatchRequest(BaseModel):
+    book_ids: List[int]
+
+
+class ApiBookExistsBatchResponse(BaseModel):
+    book_ids: List[int]
+
+
+class ApiUserReviewBatchResponse(BaseModel):
+    indexed: int
+
+
+class UserReviewBatchResponse(BaseModel):
+    indexed: int
