@@ -1,4 +1,4 @@
-import logging
+import json
 
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from src.routes.pubsub_models import PubSubMessage
 from src.routes.pubsub_utils import _unpack_envelope
+from tests.integ.integ_utils import _base_64_encode
 
 
 def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
@@ -28,6 +29,16 @@ def test_handle_endpoint_logs_error_but_suppresses_exception(test_client: TestCl
     _unpack_envelope(pub_sub_message)
 
     assert_that(caplog.text).contains("Uncaught Exception", "Incorrect padding", _invalid_base_64_object())
+
+
+def test_request_which_cant_serialize_to_pubsub_batch(test_client: TestClient, caplog: LogCaptureFixture):
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _base_64_encode(json.dumps({"what": "is this?"}))
+    pub_sub_message = PubSubMessage(**message)
+
+    _unpack_envelope(pub_sub_message)
+
+    assert_that(caplog.text).contains("Error converting payload into object", "{'what': 'is this?'}", "field required")
 
 
 def _invalid_base_64_object():

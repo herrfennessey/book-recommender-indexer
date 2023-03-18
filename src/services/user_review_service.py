@@ -36,15 +36,10 @@ class UserReviewService(object):
             remaining_reviews_to_index = await self._remove_reviews_already_indexed(user_id, user_reviews)
 
             if len(remaining_reviews_to_index) > 0:
-                # First create the reviews
-                try:
-                    batch_user_reviews = [review.dict() for review in remaining_reviews_to_index]
-                    create_response = await self.book_recommender_api_client.create_batch_user_reviews(
-                        batch_user_reviews)
-                    service_response.indexed += create_response.indexed
-                except BookRecommenderApiClientException as e:
-                    logger.error("Received 4xx response from API - Failed to index user review: {}".format(e))
-                    return service_response
+                batch_user_reviews = [review.dict() for review in remaining_reviews_to_index]
+                create_response = await self.book_recommender_api_client.create_batch_user_reviews(
+                    batch_user_reviews)
+                service_response.indexed += create_response.indexed
                 # We intentionally allow 5xx and uncaught exceptions to bubble up to the caller
             else:
                 logger.info("All reviews for user_id: {} already indexed".format(user_id))

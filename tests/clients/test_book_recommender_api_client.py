@@ -233,7 +233,7 @@ async def test_cache_prevent_more_than_one_call_to_check_if_book_exists(httpx_mo
 
 
 @pytest.mark.asyncio
-async def test_cache_doesnt_save_on_empty_response(httpx_mock,
+async def test_cache_doesnt_save_on_empty_book_response(httpx_mock,
                                                    book_recommender_api_client: BookRecommenderApiClient):
     # Given
     httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="https://testurl/books/batch/exists")
