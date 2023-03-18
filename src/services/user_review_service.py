@@ -1,11 +1,10 @@
 import logging
-from typing import List, Dict
 
 from fastapi import Depends
 from pydantic import BaseModel
+from typing import List, Dict
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
-    BookRecommenderApiClientException
+from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
 from src.clients.task_client import get_task_client, TaskClient
 from src.routes.pubsub_models import PubSubUserReviewV1
 
@@ -56,13 +55,12 @@ class UserReviewService(object):
 
     async def _remove_reviews_already_indexed(self, user_id,
                                               user_reviews: List[PubSubUserReviewV1]) -> List[PubSubUserReviewV1]:
-        candidates = user_reviews.copy()
+        reviews_to_index = user_reviews.copy()
         books_read_by_user = await self.book_recommender_api_client.get_books_read_by_user(user_id)
-        books_read_by_user_set = set(books_read_by_user)
-        for review in candidates:
-            if review.book_id in books_read_by_user_set:
-                candidates.remove(review)
-        return candidates
+        for review in user_reviews:
+            if review.book_id in books_read_by_user:
+                reviews_to_index.remove(review)
+        return reviews_to_index
 
     async def _remove_books_already_indexed(self, books_in_reviews: List[int]) -> List[int]:
         candidates = set(books_in_reviews.copy())

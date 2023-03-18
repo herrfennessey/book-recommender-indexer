@@ -9,7 +9,7 @@ services:
 
   cloud-tasks:
     image: ghcr.io/aertje/cloud-tasks-emulator:latest
-    command: -host 0.0.0.0 -port 8123 -queue "projects/test-project/locations/here/queues/test-book-queue"
+    command: -host 0.0.0.0 -port 8123 -queue "projects/test-project/locations/here/queues/test-queue"
     ports:
       - "${TASKS_PORT:-8123}:8123"
 

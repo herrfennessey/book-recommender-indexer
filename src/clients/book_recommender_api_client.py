@@ -110,20 +110,28 @@ class BookRecommenderApiClient(object):
         :return: List(int) of book_ids that exist from within your input list
         """
         # We can pop all the IDs which already exist from the cache, because that means we have checked them already
+        book_ids_that_exist_already = []
         book_ids_to_query = []
         for book_id in book_ids:
             if not self.book_exists_cache.get(book_id):
                 book_ids_to_query.append(book_id)
+            else:
+                book_ids_that_exist_already.append(book_id)
 
         url = f"{self.base_url}/books/batch/exists"
         try:
             request = ApiBookExistsBatchRequest(book_ids=book_ids_to_query)
-            response = httpx.post(url, json=request.json())
+            response = httpx.post(url, json=request.dict())
             if not response.is_error:
-                book_ids_that_exist = ApiBookExistsBatchResponse(**response.json()).book_ids
-                for book_id in book_ids_that_exist:
+                # Find ones which don't exist in our cache, but are already indexed
+                book_ids_exist_in_api = ApiBookExistsBatchResponse(**response.json()).book_ids
+                # Add the new entries to the cache
+                for book_id in book_ids_exist_in_api:
                     self.book_exists_cache[book_id] = True
-                return book_ids_that_exist
+
+                book_ids_that_exist_already.extend(book_ids_exist_in_api)
+                return book_ids_that_exist_already
+
             elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
                 logger.error("Received 429 response code from server. URL: {} ".format(url))
             elif response.is_server_error:
