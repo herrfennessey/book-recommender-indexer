@@ -48,6 +48,14 @@ class UserReviewV1BatchItem(BaseModel):
     date_read: str
     scrape_time: str
 
+    @validator("date_read", "scrape_time", pre=True, allow_reuse=True)
+    def convert_dates_and_times_to_strings(cls, input_datetime):
+        if input_datetime and isinstance(input_datetime, datetime):
+            # httpx doesn't like datetime objects in its json serializer
+            return str(input_datetime.isoformat())
+        else:
+            return str(input_datetime)
+
 
 class UserReviewV1BatchRequest(BaseModel):
     user_reviews: List[UserReviewV1BatchItem]

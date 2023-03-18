@@ -41,7 +41,7 @@ class UserReviewService(object):
                     batch_user_reviews = [review.dict() for review in remaining_reviews_to_index]
                     create_response = await self.book_recommender_api_client.create_batch_user_reviews(
                         batch_user_reviews)
-                    service_response.indexed = create_response.indexed
+                    service_response.indexed += create_response.indexed
                 except BookRecommenderApiClientException as e:
                     logger.error("Received 4xx response from API - Failed to index user review: {}".format(e))
                     return service_response
@@ -70,13 +70,11 @@ class UserReviewService(object):
         return candidates
 
     async def _remove_books_already_indexed(self, books_in_reviews: List[int]) -> List[int]:
-        candidates = books_in_reviews.copy()
+        candidates = set(books_in_reviews.copy())
         books_in_api = await self.book_recommender_api_client.get_already_indexed_books(books_in_reviews)
         books_in_api_set = set(books_in_api)
-        for book_id in candidates:
-            if book_id in books_in_api_set:
-                candidates.remove(book_id)
-        return candidates
+        candidates = candidates - books_in_api_set
+        return list(candidates)
 
 
 def get_user_review_service(

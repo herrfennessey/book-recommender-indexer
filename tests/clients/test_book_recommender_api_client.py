@@ -104,7 +104,7 @@ async def test_successful_get_books_read(httpx_mock, caplog: LogCaptureFixture,
     httpx_mock.add_response(json={"book_ids": [3, 4, 5]}, status_code=200, url="https://testurl/users/1/book-ids")
 
     # When
-    response = await book_recommender_api_client.get_already_indexed_books(1)
+    response = await book_recommender_api_client.get_books_read_by_user(1)
 
     # Then
     assert_that(response).contains_only(3, 4, 5)
@@ -120,9 +120,9 @@ async def test_cache_prevent_more_than_one_call_to_get_books_read_by_user(httpx_
 
     # When
     for _ in range(0, 10):
-        await book_recommender_api_client.get_already_indexed_books(1)
+        await book_recommender_api_client.get_books_read_by_user(1)
 
-    await book_recommender_api_client.get_already_indexed_books(2)
+    await book_recommender_api_client.get_books_read_by_user(2)
 
     # Then
     assert_that(httpx_mock.get_requests()).is_length(2)
@@ -137,7 +137,7 @@ async def test_4xx_when_getting_books_read_returns_empty_array(httpx_mock, caplo
     httpx_mock.add_response(status_code=404, url="https://testurl/users/1/book-ids")
 
     # When
-    response = await book_recommender_api_client.get_already_indexed_books(1)
+    response = await book_recommender_api_client.get_books_read_by_user(1)
 
     # Then
     assert_that(caplog.text).contains("Received 4xx exception from server", "user_id: 1",
@@ -154,7 +154,7 @@ async def test_4xx_still_gets_cached(httpx_mock, caplog: LogCaptureFixture,
 
     # When
     for _ in range(10):
-        response = await book_recommender_api_client.get_already_indexed_books(1)
+        response = await book_recommender_api_client.get_books_read_by_user(1)
 
     # Then
     assert_that(caplog.text).contains("Received 4xx exception from server", "user_id: 1",
@@ -172,7 +172,7 @@ async def test_5xx_when_getting_books_read_throws_exception(httpx_mock, caplog: 
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.get_already_indexed_books(1)
+        await book_recommender_api_client.get_books_read_by_user(1)
 
     assert_that(caplog.text).contains("Received 5xx exception from server", "user_id: 1",
                                       "https://testurl/users/1/book-ids")
@@ -187,95 +187,75 @@ async def test_unhandled_exceptions_when_getting_books_read_throws_exception(htt
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException) as e:
-        await book_recommender_api_client.get_already_indexed_books(1)
+        await book_recommender_api_client.get_books_read_by_user(1)
 
     assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/users/1/book-ids")
 
 
 @pytest.mark.asyncio
-async def test_404_to_see_if_book_exists(httpx_mock,
-                                         book_recommender_api_client: BookRecommenderApiClient):
+async def test_empty_response_to_see_if_book_exists(httpx_mock,
+                                                    book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    httpx_mock.add_response(status_code=404, url="https://testurl/books/1")
+    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="https://testurl/books/batch/exists")
 
     # When
-    response = await book_recommender_api_client.does_book_exist(1)
+    response = await book_recommender_api_client.get_already_indexed_books([1])
 
     # Then
-    assert_that(response).is_false()
+    assert_that(response).is_equal_to([])
 
 
 @pytest.mark.asyncio
 async def test_200_to_see_if_book_exists(httpx_mock,
                                          book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    httpx_mock.add_response(status_code=200, url="https://testurl/books/1")
+    httpx_mock.add_response(json={"book_ids": [1]}, status_code=200, url="https://testurl/books/batch/exists")
 
     # When
-    response = await book_recommender_api_client.does_book_exist(1)
+    response = await book_recommender_api_client.get_already_indexed_books([1])
 
     # Then
-    assert_that(response).is_true()
+    assert_that(response).is_equal_to([1])
 
 
 @pytest.mark.asyncio
 async def test_cache_prevent_more_than_one_call_to_check_if_book_exists(httpx_mock,
                                                                         book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    httpx_mock.add_response(status_code=200, url="https://testurl/books/1")
+    httpx_mock.add_response(json={"book_ids": [1]}, status_code=200, url="https://testurl/books/batch/exists")
 
     # When
-    for _ in range(0, 10):
-        response = await book_recommender_api_client.does_book_exist(1)
+    response = await book_recommender_api_client.get_already_indexed_books([1])
 
     # Then
-    assert_that(response).is_true()
+    assert_that(response).is_equal_to([1])
     assert_that(httpx_mock.get_requests()).is_length(1)
 
 
 @pytest.mark.asyncio
-async def test_cache_doesnt_save_404_on_check_if_book_exists(httpx_mock,
-                                                             book_recommender_api_client: BookRecommenderApiClient):
+async def test_cache_doesnt_save_on_empty_response(httpx_mock,
+                                                   book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    httpx_mock.add_response(status_code=404, url="https://testurl/books/1")
+    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="https://testurl/books/batch/exists")
 
     # When
     for _ in range(0, 10):
-        response = await book_recommender_api_client.does_book_exist(1)
+        response = await book_recommender_api_client.get_already_indexed_books([1])
 
     # Then
-    assert_that(response).is_false()
+    assert_that(response).is_equal_to([])
     assert_that(httpx_mock.get_requests()).is_length(10)
-
-
-@pytest.mark.asyncio
-async def test_4xx_when_querying_if_book_exists_returns_false(httpx_mock, caplog: LogCaptureFixture,
-                                                              book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-    caplog.set_level("INFO", logger="book_recommender_api_client")
-    httpx_mock.add_response(status_code=404, url="https://testurl/books/1")
-
-    # When
-    response = await book_recommender_api_client.does_book_exist(1)
-
-    # Then
-    assert_that(response).is_false()
-    assert_that(caplog.text).contains("does not exist", "book_id: 1", "https://testurl/books/1")
 
 
 @pytest.mark.asyncio
 async def test_5xx_when_querying_if_book_exists_throws_exception(httpx_mock, caplog: LogCaptureFixture,
                                                                  book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    caplog.set_level("INFO", logger="book_recommender_api_client")
-    httpx_mock.add_response(status_code=500, url="https://testurl/books/1")
+    httpx_mock.add_response(status_code=500, url="https://testurl/books/batch/exists")
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.does_book_exist(1)
-
-    assert_that(caplog.text).contains("Received 5xx exception from server", "book_id: 1",
-                                      "https://testurl/books/1")
+        await book_recommender_api_client.get_already_indexed_books([1])
 
 
 @pytest.mark.asyncio
@@ -283,46 +263,56 @@ async def test_unhandled_exceptions_when_querying_if_book_exists_throws_exceptio
                                                                                   caplog: LogCaptureFixture,
                                                                                   book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    caplog.set_level("INFO", logger="book_recommender_api_client")
     httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.does_book_exist(1)
+        await book_recommender_api_client.get_already_indexed_books([1, 2, 3])
 
-    assert_that(caplog.text).contains("Uncaught Exception", "Unable to read within timeout", "book_id: 1",
-                                      "https://testurl/books/1")
+    assert_that(caplog.text).contains("HTTP Error", "Unable to read within timeout", "[1, 2, 3]")
 
 
 @pytest.mark.asyncio
 async def test_successful_user_review_creation(httpx_mock, caplog: LogCaptureFixture,
                                                book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    caplog.set_level("INFO", logger="book_recommender_api_client")
-    httpx_mock.add_response(status_code=200, url="https://testurl/users/1/reviews/2")
-    review = _a_random_review()
+    httpx_mock.add_response(json={"indexed": 1}, status_code=200, url="https://testurl/users/batch/create")
+    reviews = [_a_random_review()]
 
     # When
-    await book_recommender_api_client.create_batch_user_reviews(review)
+    await book_recommender_api_client.create_batch_user_reviews(reviews)
 
     # Then
-    assert_that(caplog.text).contains("Successfully wrote review", "user_id: 1", "book_id: 2")
+    assert_that(caplog.text).contains("Successfully indexed 1 user reviews")
 
 
 @pytest.mark.asyncio
-async def test_4xx_user_review_creation_throws_exception(httpx_mock, caplog: LogCaptureFixture,
+async def test_batch_correctly_takes_indexed_from_api_not_input(httpx_mock, caplog: LogCaptureFixture,
+                                                                book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    httpx_mock.add_response(json={"indexed": 2}, status_code=200, url="https://testurl/users/batch/create")
+    reviews = [_a_random_review(), _a_random_review(), _a_random_review()]
+
+    # When
+    await book_recommender_api_client.create_batch_user_reviews(reviews)
+
+    # Then
+    assert_that(caplog.text).contains("Successfully indexed 2 user reviews")
+
+
+@pytest.mark.asyncio
+async def test_429_user_review_creation_throws_exception(httpx_mock, caplog: LogCaptureFixture,
                                                          book_recommender_api_client: BookRecommenderApiClient):
     # Given
     caplog.set_level("INFO", logger="book_recommender_api_client")
-    httpx_mock.add_response(status_code=404, url="https://testurl/users/1/reviews/2")
+    httpx_mock.add_response(status_code=429, url="https://testurl/users/batch/create")
     review = _a_random_review()
 
     # When / Then
-    with pytest.raises(BookRecommenderApiClientException):
-        await book_recommender_api_client.create_batch_user_reviews(review)
+    with pytest.raises(BookRecommenderApiServerException):
+        await book_recommender_api_client.create_batch_user_reviews([review])
 
-    assert_that(caplog.text).contains("Received 4xx exception from server", "user_id: 1", "book_id: 2",
-                                      "https://testurl/users/1/reviews/2")
+    assert_that(caplog.text).contains("Received 429 response code", "https://testurl/users/batch/create")
 
 
 @pytest.mark.asyncio
@@ -330,15 +320,14 @@ async def test_5xx_user_review_creation_throws_exception(httpx_mock, caplog: Log
                                                          book_recommender_api_client: BookRecommenderApiClient):
     # Given
     caplog.set_level("INFO", logger="book_recommender_api_client")
-    httpx_mock.add_response(status_code=500, url="https://testurl/users/1/reviews/2")
+    httpx_mock.add_response(status_code=500, url="https://testurl/users/batch/create")
     review = _a_random_review()
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.create_batch_user_reviews(review)
+        await book_recommender_api_client.create_batch_user_reviews([review])
 
-    assert_that(caplog.text).contains("Received 5xx exception from server", "user_id: 1", "book_id: 2",
-                                      "https://testurl/users/1/reviews/2")
+    assert_that(caplog.text).contains("Received 5xx exception from server", "https://testurl/users/batch/create")
 
 
 @pytest.mark.asyncio
@@ -352,25 +341,9 @@ async def test_unhandled_exceptions_when_creating_user_review_throws_exception(h
 
     # When / Then
     with pytest.raises(BookRecommenderApiServerException) as e:
-        await book_recommender_api_client.create_batch_user_reviews(review)
+        await book_recommender_api_client.create_batch_user_reviews([review])
 
-    assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/users/1/reviews/2 ",
-                                          "user_id: 1 book_id: 2")
-
-
-@pytest.mark.asyncio
-async def test_successful_user_review_creation(httpx_mock, caplog: LogCaptureFixture,
-                                               book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-    caplog.set_level("INFO", logger="book_recommender_api_client")
-    httpx_mock.add_response(status_code=200, url="https://testurl/users/1/reviews/2")
-    review = _a_random_review()
-
-    # When
-    await book_recommender_api_client.create_batch_user_reviews(review)
-
-    # Then
-    assert_that(caplog.text).contains("Successfully wrote review", "user_id: 1", "book_id: 2")
+    assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/users/batch/create")
 
 
 @pytest.fixture

@@ -26,6 +26,6 @@ def _unpack_envelope(request: PubSubMessage) -> PubSubItemBatch:
     except JSONDecodeError as _:
         logging.error("Payload was not in JSON - received %s", payload)
     except ValidationError as e:
-        logging.error("Error converting payload into profiles object. Received: %s Error: %s", json_payload, e)
+        logging.error("Error converting payload into object. Received: %s Error: %s", json_payload, e)
     except Exception as e:
         logging.error("Uncaught Exception while handling pubsub message. Exception: %s. Message: %s", e, request.dict())

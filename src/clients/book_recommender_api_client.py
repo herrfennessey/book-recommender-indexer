@@ -117,18 +117,15 @@ class BookRecommenderApiClient(object):
 
         url = f"{self.base_url}/books/batch/exists"
         try:
-            response = httpx.post(url, json=ApiBookExistsBatchRequest(book_ids=book_ids_to_query))
+            request = ApiBookExistsBatchRequest(book_ids=book_ids_to_query)
+            response = httpx.post(url, json=request.json())
             if not response.is_error:
                 book_ids_that_exist = ApiBookExistsBatchResponse(**response.json()).book_ids
                 for book_id in book_ids_that_exist:
                     self.book_exists_cache[book_id] = True
                 return book_ids_that_exist
-            elif response.is_client_error:
-                logger.error(
-                    "Received 4xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,
-                                                                                                   book_ids_to_query))
-                raise BookRecommenderApiClientException(
-                    "4xx Exception encountered {} for book_ids: {}".format(response.text, book_ids_to_query))
+            elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
+                logger.error("Received 429 response code from server. URL: {} ".format(url))
             elif response.is_server_error:
                 logger.error(
                     "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,
@@ -136,6 +133,8 @@ class BookRecommenderApiClient(object):
                 raise BookRecommenderApiServerException(
                     "5xx Exception encountered {} for book_ids: {}".format(response.text, book_ids_to_query))
         except httpx.HTTPError as e:
+            logger.error(
+                "HTTP Error received {} on URL: {} book_ids: {}".format(e, url, book_ids_to_query))
             raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
     async def create_batch_user_reviews(self, user_review_batch: List[Dict[str, Any]]) -> UserReviewBatchResponse:
@@ -147,8 +146,8 @@ class BookRecommenderApiClient(object):
                 # Probably excessive to deserialize and reserialize the same response, but I really don't like digging
                 # in raw JSON by key
                 api_response = ApiUserReviewBatchResponse(**response.json())
-                logger.info("Successfully created batch user reviews. Indexed: {}".format(api_response.indexed))
-                return ClientUserReviewBatchResponse(indexed=api_response.indexed)
+                logger.info("Successfully indexed {} user reviews".format(api_response.indexed))
+                return UserReviewBatchResponse(indexed=api_response.indexed)
             elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
                 logger.error("Received 429 response code from server. URL: {} ".format(url))
                 raise BookRecommenderApiServerException("Received HTTP_429_TOO_MANY_REQUESTS from server")
