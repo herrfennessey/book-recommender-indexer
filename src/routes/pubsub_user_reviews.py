@@ -1,14 +1,10 @@
-import base64
-import json
 import logging
-from json import JSONDecodeError
 
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
-from starlette.responses import Response
-from starlette.status import HTTP_200_OK
 
-from src.routes.pubsub_models import PubSubMessage, PubSubUserReviewV1
+from src.routes.pubsub_models import PubSubMessage, PubSubUserReviewV1, IndexerResponse
+from src.routes.pubsub_utils import _unpack_envelope
 from src.services.user_review_service import get_user_review_service, UserReviewService
 
 logger = logging.getLogger(__name__)
@@ -45,15 +41,19 @@ async def handle_pubsub_message(
     """
     logging.debug("Handling message with ID %s - Publish Time %s - Attributes %s", request.message.message_id,
                   request.message.publish_time, request.message.attributes)
-    try:
-        payload = base64.b64decode(request.message.data).decode("utf-8")
-        json_payload = json.loads(payload)
-        user_review = PubSubUserReviewV1(**json_payload)
-    except JSONDecodeError as _:
-        logging.error("Payload was not in JSON - received %s", payload)
-        return Response(status_code=HTTP_200_OK)
-    except ValidationError as e:
-        logging.error("Error converting payload into user review object. Received: %s Error: %s", json_payload, e)
-        return Response(status_code=HTTP_200_OK)
 
-    return await user_review_service.process_pubsub_message(user_review)
+    batch = _unpack_envelope(request)
+    items = []
+    for item in batch.items:
+        try:
+            items.append(PubSubUserReviewV1(**item))
+        except ValidationError as e:
+            logging.error("Error converting item into PubSubUserReviewV1 object. Received: %s Error: %s", batch.items,
+                          e)
+
+    if len(items) > 0:
+        service_response = await user_review_service.process_pubsub_batch_message(items)
+        return IndexerResponse(**service_response.dict())
+
+    return IndexerResponse()
+

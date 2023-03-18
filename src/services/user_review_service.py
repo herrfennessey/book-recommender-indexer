@@ -2,9 +2,9 @@ import logging
 
 from fastapi import Depends
 from pydantic import BaseModel
+from typing import List, Dict
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
-    BookRecommenderApiClientException
+from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
 from src.clients.task_client import get_task_client, TaskClient
 from src.routes.pubsub_models import PubSubUserReviewV1
 
@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 class UserReviewServiceResponse(BaseModel):
-    indexed_review: bool = False
-    task_name: str = None
+    indexed: int = 0
+    tasks: List[str] = []
 
 
 class UserReviewService(object):
@@ -21,33 +21,53 @@ class UserReviewService(object):
         self.book_recommender_api_client = book_recommender_api_client
         self.task_client = task_client
 
-    async def process_pubsub_message(self, pubsub_message: PubSubUserReviewV1) -> UserReviewServiceResponse:
-        response = UserReviewServiceResponse()
+    async def process_pubsub_batch_message(self, pubsub_message: List[PubSubUserReviewV1]) -> UserReviewServiceResponse:
+        service_response = UserReviewServiceResponse()
 
-        book_id = pubsub_message.book_id
-        user_id = pubsub_message.user_id
-        if await self._do_we_need_to_index_user_review(user_id, book_id):
-            try:
-                await self.book_recommender_api_client.create_user_review(pubsub_message.dict())
-                response.indexed_review = True
-            except BookRecommenderApiClientException as e:
-                logger.error("Received 4xx response from API - Failed to index user review: {}".format(e))
-                return response
-            # We intentionally allow 5xx and uncaught exceptions to bubble up to the caller
-        else:
-            logger.info("User review already indexed for user_id: {} and book_id: {}".format(
-                user_id, book_id))
+        # Partition by user ID - it should already be, but can't be too certain
+        user_to_review_batch_dict: Dict[int, List[PubSubUserReviewV1]] = {}
+        for user_review in pubsub_message:
+            if user_review.user_id not in user_to_review_batch_dict:
+                user_to_review_batch_dict[user_review.user_id] = []
+            user_to_review_batch_dict[user_review.user_id].append(user_review)
 
-        # If this is a new book, we should also trigger a background task to scrape it, but the user shouldn't wait
-        book_exists = await self.book_recommender_api_client.does_book_exist(book_id)
-        if not book_exists:
-            logging.info("Attempting to enqueue book_id: %s", book_id)
-            response.task_name = self.task_client.enqueue_book(book_id)
-        return response
+        for user_id, user_reviews in user_to_review_batch_dict.items():
+            remaining_reviews_to_index = await self._remove_reviews_already_indexed(user_id, user_reviews)
 
-    async def _do_we_need_to_index_user_review(self, user_id, book_id):
+            if len(remaining_reviews_to_index) > 0:
+                batch_user_reviews = [review.dict() for review in remaining_reviews_to_index]
+                create_response = await self.book_recommender_api_client.create_batch_user_reviews(
+                    batch_user_reviews)
+                service_response.indexed += create_response.indexed
+                # We intentionally allow 5xx and uncaught exceptions to bubble up to the caller
+            else:
+                logger.info("All reviews for user_id: {} already indexed".format(user_id))
+
+            # Now kick off an asynchronous scrape for books which also don't exist yet
+            books_in_reviews = [review.book_id for review in user_reviews]
+            books_to_scrape = await self._remove_books_already_indexed(books_in_reviews)
+            for book_id in books_to_scrape:
+                logging.info("Attempting to enqueue book_id: %s", book_id)
+                task_name = self.task_client.enqueue_book(book_id)
+                service_response.tasks.append(task_name)
+
+        return service_response
+
+    async def _remove_reviews_already_indexed(self, user_id,
+                                              user_reviews: List[PubSubUserReviewV1]) -> List[PubSubUserReviewV1]:
+        reviews_to_index = user_reviews.copy()
         books_read_by_user = await self.book_recommender_api_client.get_books_read_by_user(user_id)
-        return book_id not in books_read_by_user
+        for review in user_reviews:
+            if review.book_id in books_read_by_user:
+                reviews_to_index.remove(review)
+        return reviews_to_index
+
+    async def _remove_books_already_indexed(self, books_in_reviews: List[int]) -> List[int]:
+        candidates = set(books_in_reviews.copy())
+        books_in_api = await self.book_recommender_api_client.get_already_indexed_books(books_in_reviews)
+        books_in_api_set = set(books_in_api)
+        candidates = candidates - books_in_api_set
+        return list(candidates)
 
 
 def get_user_review_service(
