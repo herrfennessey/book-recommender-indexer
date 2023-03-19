@@ -4,6 +4,7 @@ from typing import Union
 
 import grpc
 from fastapi import Depends
+from google.api_core.exceptions import AlreadyExists
 from google.cloud import tasks_v2
 from google.cloud.tasks_v2 import CloudTasksClient
 from google.cloud.tasks_v2.services.cloud_tasks.transports import CloudTasksGrpcTransport
@@ -48,6 +49,7 @@ class TaskQueuePayload(BaseModel):
 
 
 class TaskQueueRequest(BaseModel):
+    name: str
     http_request: TaskQueuePayload
 
 
@@ -62,8 +64,7 @@ class TaskClient(object):
                                                          self.properties.cloud_task_region)
 
         # This is the actual queue path we expect to find in there
-        queue_path = self.client.queue_path(self.properties.gcp_project_name, self.properties.cloud_task_region,
-                                            self.properties.task_queue_name)
+        queue_path = self._generate_parent_path()
 
         queue_generator = self.client.list_queues(parent=location_path)
         # We want to make sure our queue exists before we start sending stuff to it
@@ -80,14 +81,22 @@ class TaskClient(object):
         book_json = book_scrape_request.json()
         # cloud tasks expects bytes
         book_bytes = book_json.encode("utf-8")
+
+        # We use the book ID as part of the task name to deduplicate the task queue.
+        task_name = f"book-{book_id}"
         task = TaskQueueRequest(
+            name=self._generate_task_path(task_name),
             http_request=TaskQueuePayload(url=f"{self.properties.scraper_client_base_url}/crawl.json", body=book_bytes))
 
-        parent = self.client.queue_path(self.properties.gcp_project_name, self.properties.cloud_task_region,
-                                        self.properties.task_queue_name)
-        response = self.client.create_task(parent=parent, task=task.dict())
-        logging.info("Created task for book: {}".format(book_id))
-        return response.name
+        parent = self._generate_parent_path()
+
+        try:
+            response = self.client.create_task(parent=parent, task=task.dict())
+            logging.info("Created task for book: {}".format(book_id))
+            return response.name
+        except AlreadyExists as _:
+            logging.info("Task already exists for book: {}".format(book_id))
+            return "duplicate"
 
     def enqueue_user_scrape(self, user_profile_id: str) -> str:
         user_scrape_request = ScrapeRequest(spider_name=USER_REVIEWS_SPIDER_NAME,
@@ -97,15 +106,44 @@ class TaskClient(object):
         user_scrape_request_json = user_scrape_request.json()
         # cloud tasks expects bytes
         user_scrape_request_bytes = user_scrape_request_json.encode("utf-8")
+
+        # We use the user profile ID as part of the task name to deduplicate the task queue.
+        task_name = f"user-{user_profile_id}"
         task = TaskQueueRequest(
+            name=self._generate_task_path(task_name),
             http_request=TaskQueuePayload(url=f"{self.properties.scraper_client_base_url}/crawl.json",
                                           body=user_scrape_request_bytes))
 
+        parent = self._generate_parent_path()
+        try:
+            response = self.client.create_task(parent=parent, task=task.dict())
+            logging.info("Created task for user ID: {}".format(user_profile_id))
+        except AlreadyExists as _:
+            logging.info("Task already exists for user ID: {}".format(user_profile_id))
+            return "duplicate"
+
+        return response.name
+
+    def _generate_parent_path(self):
+        """
+        The parent path is the absolute path to the queue we want to send tasks to
+
+        :return: str : Fully qualified path to the queue
+        """
         parent = self.client.queue_path(self.properties.gcp_project_name, self.properties.cloud_task_region,
                                         self.properties.task_queue_name)
-        response = self.client.create_task(parent=parent, task=task.dict())
-        logging.info("Created task for user ID: {}".format(user_profile_id))
-        return response.name
+        return parent
+
+    def _generate_task_path(self, task_name: str) -> str:
+        """
+        The task path is the absolute path of the task itself. We can set this explicitly, or it will be auto set
+        by the cloud tasks client.
+
+        :return: str : Fully qualified path to the task itself
+        """
+        parent = self.client.task_path(self.properties.gcp_project_name, self.properties.cloud_task_region,
+                                       self.properties.task_queue_name, task_name)
+        return parent
 
 
 def get_cloud_tasks_client(properties: Properties = Depends(get_properties)):
