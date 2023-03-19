@@ -128,6 +128,38 @@ def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_clie
     assert_that(response.json().get("tasks")).is_length(2)
 
 
+def test_duplicate_books_correctly_only_create_one_task(httpx_mock, test_client: TestClient,
+                                                           caplog: LogCaptureFixture,
+                                                           cloud_tasks: CloudTasksClient):
+    # Given
+    _user_has_read_no_books(httpx_mock, user_id=1)
+    _user_has_read_no_books(httpx_mock, user_id=2)
+
+    _user_review_batch_create_successful(httpx_mock, 1)  # A bit sloppy, but both are going to create one item
+    _book_exists_in_db(httpx_mock, book_ids=[])
+
+    reviews = [_a_random_user_review(user_id=1, book_id=1),  # Unread by user 1
+               _a_random_user_review(user_id=2, book_id=1)]  # Unread by user 1
+
+    payload = json.dumps({"items": reviews})
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _base_64_encode(payload)
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    # Two separate users should get two separate calls to create user review batches
+    create_calls = [True for message in caplog.messages if message == "Successfully indexed 1 user reviews"]
+    assert_that(create_calls).is_length(2)
+    # But their index count should be aggregated together
+    assert_that(response.json().get("indexed")).is_equal_to(2)
+    # And the number of tasks should be the number of books that need to be enqueued, regardless of who enqueued them
+    assert_that(response.json().get("tasks")).is_length(2)
+    assert_that(response.json().get("tasks")).contains("duplicate")
+
+
 def test_user_review_doesnt_exist_book_exists(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
                                               cloud_tasks):
     # Given
