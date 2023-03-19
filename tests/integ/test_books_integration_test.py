@@ -36,6 +36,7 @@ def test_handle_endpoint_rejects_non_book_objects(test_client: TestClient):
 
 def test_book_recommender_client_error_suppressed(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
+    _book_doesnt_exist_in_api(httpx_mock)
     _put_call_receives_4xx(httpx_mock)
     payload = json.dumps({"items": [_a_random_book_dict()]})
 
@@ -52,6 +53,7 @@ def test_book_recommender_client_error_suppressed(httpx_mock, test_client: TestC
 
 def test_book_recommender_server_error_propagates(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
+    _book_doesnt_exist_in_api(httpx_mock)
     _put_call_receives_5xx(httpx_mock)
     payload = json.dumps({"items": [_a_random_book_dict()]})
 
@@ -84,6 +86,7 @@ def test_well_formed_request_but_not_a_valid_book_returns_200(test_client: TestC
 def test_successful_book_write(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
     _put_call_is_successful(httpx_mock)
+    _book_doesnt_exist_in_api(httpx_mock)
     payload = json.dumps({"items": [_a_random_book_dict()]})
 
     message = _an_example_pubsub_post_call()
@@ -102,6 +105,7 @@ def test_invalid_item_in_batch_doesnt_prevent_other_writes(httpx_mock, test_clie
                                                            caplog: LogCaptureFixture):
     # Given
     _put_call_is_successful(httpx_mock)
+    _book_doesnt_exist_in_api(httpx_mock)
     payload = json.dumps({"items": [_a_random_book_dict(), {"abc": 123}]})
 
     message = _an_example_pubsub_post_call()
@@ -116,8 +120,25 @@ def test_invalid_item_in_batch_doesnt_prevent_other_writes(httpx_mock, test_clie
     assert_that(response.json().get("indexed")).is_equal_to(1)
 
 
+def test_book_already_exists_prevents_redundant_write(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
+    # Given
+    _book_already_exists_in_api(httpx_mock, [4])
+    payload = json.dumps({"items": [_a_random_book_dict()]})
+
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _base_64_encode(payload)
+
+    # When
+    response = test_client.post("/pubsub/books/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(response.json().get("indexed")).is_equal_to(0)
+
+
 def test_multiple_valid_books_with_successful_puts(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture):
     # Given
+    _book_doesnt_exist_in_api(httpx_mock)
     _put_call_is_successful(httpx_mock, 1)
     _put_call_is_successful(httpx_mock, 2)
 
@@ -144,6 +165,7 @@ def test_multiple_valid_books_with_successful_puts(httpx_mock, test_client: Test
 def test_multiple_valid_books_with_one_4xx_put_fails_gracefully(httpx_mock, test_client: TestClient,
                                                                 caplog: LogCaptureFixture):
     # Given
+    _book_doesnt_exist_in_api(httpx_mock)
     _put_call_is_successful(httpx_mock, 1)
     _put_call_receives_4xx(httpx_mock, 2)
 
@@ -170,6 +192,7 @@ def test_multiple_valid_books_with_one_4xx_put_fails_gracefully(httpx_mock, test
 def test_multiple_valid_books_with_one_5xx_put_fails_entire_batch(httpx_mock, test_client: TestClient,
                                                                   caplog: LogCaptureFixture):
     # Given
+    _book_doesnt_exist_in_api(httpx_mock)
     _put_call_is_successful(httpx_mock, 1)
     _put_call_receives_5xx(httpx_mock, 2)
 
@@ -189,6 +212,16 @@ def test_multiple_valid_books_with_one_5xx_put_fails_entire_batch(httpx_mock, te
 
     # Then
     assert_that(response.status_code).is_equal_to(500)
+
+
+def _book_already_exists_in_api(httpx_mock, book_ids=[4]):
+    httpx_mock.add_response(json={"book_ids": book_ids}, status_code=200,
+                            url=f"http://localhost:9000/books/batch/exists", method="POST")
+
+
+def _book_doesnt_exist_in_api(httpx_mock, book_ids=[]):
+    httpx_mock.add_response(json={"book_ids": book_ids}, status_code=200,
+                            url=f"http://localhost:9000/books/batch/exists", method="POST")
 
 
 def _put_call_is_successful(httpx_mock, book_id=4):

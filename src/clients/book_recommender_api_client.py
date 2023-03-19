@@ -99,7 +99,7 @@ class BookRecommenderApiClient(object):
         except httpx.HTTPError as e:
             raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
-    async def get_already_indexed_books(self, book_ids: List[int]):
+    async def get_already_indexed_books(self, book_ids: List[int]) -> List[int]:
         """
         Function which will query book_recommender_api to see if we have that book indexed already
 

@@ -53,8 +53,13 @@ async def handle_pubsub_message(
             except ValidationError as e:
                 logging.error("Error converting item into PubSubBookV1 object. Received: %s Error: %s", book, e)
                 continue
+            book_that_already_exist = await client.get_already_indexed_books([serialized_book.book_id])
 
-            await client.create_book(serialized_book.dict())
+            if serialized_book.book_id in book_that_already_exist:
+                logging.info("Book %s already indexed, skipping", serialized_book.book_id)
+                continue
+            else:
+                await client.create_book(serialized_book.dict())
             indexed += 1
     except BookRecommenderApiClientException as e:
         logging.error("API returned 4xx exception when called with payload %s - exception: %s", serialized_book, e)
