@@ -1,8 +1,7 @@
 import logging
-from typing import List
 
 from fastapi import APIRouter, Depends
-from pydantic import ValidationError, BaseModel
+from pydantic import ValidationError
 
 from src.clients.task_client import get_task_client, TaskClient
 from src.routes.pubsub_models import PubSubMessage, PubSubProfileV1, IndexerResponse
