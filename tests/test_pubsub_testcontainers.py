@@ -19,10 +19,7 @@ def test_setup(publisher_client, subscriber_client):
 
 
 def _consume_one_message(client: SubscriberClient):
-    response = client.pull(
-        request={"subscription": _get_subscription_path(), "max_messages": 1, "return_immediately": True},
-        retry=retry.Retry(deadline=20)
-        )
+    response = client.pull(request={"subscription": _get_subscription_path(), "max_messages": 1}, timeout=2)
     ack_ids = [received_message.ack_id for received_message in response.received_messages]
     client.acknowledge(request={"subscription": _get_subscription_path(), "ack_ids": ack_ids})
     return response

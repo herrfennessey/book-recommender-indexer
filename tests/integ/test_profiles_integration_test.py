@@ -37,7 +37,7 @@ def test_setup(publisher_client, subscriber_client):
 
 def _consume_messages(client: SubscriberClient):
     response = client.pull(
-        request={"subscription": _get_subscription_path(), "max_messages": 100, "return_immediately": True})
+        request={"subscription": _get_subscription_path(), "max_messages": 100}, timeout=2)
     ack_ids = [received_message.ack_id for received_message in response.received_messages]
     if len(ack_ids) > 0:
         client.acknowledge(request={"subscription": _get_subscription_path(), "ack_ids": ack_ids})
