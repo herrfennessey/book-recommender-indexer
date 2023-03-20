@@ -9,5 +9,8 @@ class Properties(BaseSettings):
     gcp_project_name: str = "test-project"
     pubsub_book_topic_name: str = "test-topic"
     pubsub_user_review_topic_name: str = "test-topic"
+    pubsub_profiles_audit_topic_name = "test-topic"
+    pubsub_book_audit_topic_name = "test-topic"
+    pubsub_user_review_audit_topic_name = "test-topic"
     cloud_task_region: str = "here"
     task_queue_name: str = "test-queue"

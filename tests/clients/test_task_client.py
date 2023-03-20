@@ -1,3 +1,4 @@
+import pytest
 from assertpy import assert_that
 from google.cloud.tasks_v2 import CloudTasksClient
 
@@ -6,6 +7,12 @@ from src.dependencies import Properties
 
 default_properties = Properties()
 PARENT_QUEUE = f"projects/{default_properties.gcp_project_name}/locations/{default_properties.cloud_task_region}/queues/{default_properties.task_queue_name}"
+
+
+@pytest.fixture(autouse=True)
+def test_setup(cloud_tasks):
+    cloud_tasks.purge_queue(request={"name": PARENT_QUEUE})
+    yield
 
 
 def test_task_client_ready_validates_our_queues_exist(cloud_tasks: CloudTasksClient):

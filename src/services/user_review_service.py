@@ -1,8 +1,8 @@
 import logging
+from typing import List, Dict
 
 from fastapi import Depends
 from pydantic import BaseModel
-from typing import List, Dict
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
 from src.clients.task_client import get_task_client, TaskClient
