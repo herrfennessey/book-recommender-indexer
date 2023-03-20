@@ -8,6 +8,7 @@ from src.dependencies import Properties
 properties = Properties()
 SUBSCRIBER_NAME = "test-topic-sub"
 
+
 @pytest.fixture(autouse=True)
 def test_setup(publisher_client, subscriber_client):
     publisher_client.create_topic(request={"name": _get_topic_path()})
@@ -18,17 +19,17 @@ def test_setup(publisher_client, subscriber_client):
 
 
 def _consume_one_message(client: SubscriberClient):
-    response = client.pull(request={"subscription": _get_subscription_path(), "max_messages": 1},
-                           retry=retry.Retry(deadline=20)
-                           )
+    response = client.pull(
+        request={"subscription": _get_subscription_path(), "max_messages": 1, "return_immediately": True},
+        retry=retry.Retry(deadline=20)
+        )
     ack_ids = [received_message.ack_id for received_message in response.received_messages]
     client.acknowledge(request={"subscription": _get_subscription_path(), "ack_ids": ack_ids})
     return response
 
 
 def test_pubsub_testcontainers_works(publisher_client, subscriber_client):
-    publish_future = publisher_client.publish(_get_topic_path(), b"test message")
-    message_id = publish_future.result()
+    message_id = publisher_client.publish(_get_topic_path(), b"test message").result()
     message = _consume_one_message(client=subscriber_client)
     for received_message in message.received_messages:
         assert_that(received_message.message.message_id).is_equal_to(message_id)
