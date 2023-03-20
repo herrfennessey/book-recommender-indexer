@@ -13,3 +13,8 @@ services:
     ports:
       - "${TASKS_PORT:-8123}:8123"
 
+  cloud-pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+    command: gcloud beta emulators pubsub start --project=test-project --host-port=8700
+    ports:
+      - "8700:8700"
