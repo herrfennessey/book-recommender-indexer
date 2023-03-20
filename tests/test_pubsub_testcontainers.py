@@ -1,6 +1,5 @@
 import pytest
 from assertpy import assert_that
-from google.api_core import retry
 from google.pubsub_v1 import SubscriberClient
 
 from src.dependencies import Properties
