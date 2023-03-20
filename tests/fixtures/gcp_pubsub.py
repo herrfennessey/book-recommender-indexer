@@ -2,7 +2,6 @@ from _pytest.fixtures import fixture
 from google.pubsub_v1 import PublisherClient, SubscriberClient
 from testcontainers.core.waiting_utils import wait_for_logs
 
-from src.dependencies import Properties
 from tests.pubsub_container import PubSubContainer
 
 
