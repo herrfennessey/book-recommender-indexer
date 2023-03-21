@@ -37,3 +37,20 @@ def test_task_client_fails_with_unknown_queue(cloud_tasks: CloudTasksClient):
 
     # Then
     assert_that(response).is_false()
+
+
+def test_task_queue_successfully_deduplicates_user_tasks(cloud_tasks: CloudTasksClient):
+    # Given
+    task_client = TaskClient(cloud_tasks, default_properties)
+
+    # When
+    task_name = task_client.enqueue_user_scrape("abc123")
+    task_name_2 = task_client.enqueue_user_scrape("abc123")
+
+    # Then
+    assert_that(task_name).is_equal_to(f"{PARENT_QUEUE}/tasks/user-abc123")
+    assert_that(task_name_2).is_equal_to("duplicate")
+    assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_length(1)
+
+    cloud_tasks.delete_task(request={"name": task_name})
+    assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_empty()
