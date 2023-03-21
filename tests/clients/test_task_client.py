@@ -52,6 +52,9 @@ def test_task_queue_successfully_deduplicates_user_tasks(cloud_tasks: CloudTasks
     assert_that(task_name_2).is_equal_to("duplicate")
     assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_length(1)
 
+    cloud_tasks.delete_task(request={"name": task_name})
+    assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_empty()
+
 
 def test_task_queue_successfully_deduplicates_book_tasks(cloud_tasks: CloudTasksClient):
     # Given
@@ -65,3 +68,7 @@ def test_task_queue_successfully_deduplicates_book_tasks(cloud_tasks: CloudTasks
     assert_that(task_name).is_equal_to(f"{PARENT_QUEUE}/tasks/book-12345")
     assert_that(task_name_2).is_equal_to("duplicate")
     assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_length(1)
+
+    cloud_tasks.delete_task(request={"name": task_name})
+    assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_empty()
+
