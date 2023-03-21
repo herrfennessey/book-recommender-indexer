@@ -11,7 +11,8 @@ PARENT_QUEUE = f"projects/{default_properties.gcp_project_name}/locations/{defau
 
 @pytest.fixture(autouse=True)
 def test_setup(cloud_tasks):
-    cloud_tasks.purge_queue(request={"name": PARENT_QUEUE})
+    for task in cloud_tasks.list_tasks(request={"parent": PARENT_QUEUE}):
+        cloud_tasks.delete_task(request={"name": task.name})
     yield
 
 

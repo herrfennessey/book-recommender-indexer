@@ -43,7 +43,7 @@ class PubsubAuditClient(object):
 
         futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
         logging.info(
-            "Sent {} items to PubSub in {} milliseconds".format(len(messages), time.time() * 1000 - start_time))
+            "Sent {} items to {} in {} milliseconds".format(len(messages), topic_name, time.time() * 1000 - start_time))
 
     @staticmethod
     def get_callback(
