@@ -1,22 +1,15 @@
 import logging
-from functools import lru_cache
 
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 
-from src.clients.pubsub_audit_client import PubsubAuditClient, get_pubsub_audit_client
+from src.clients.pubsub_audit_client import PubSubAuditClient, get_pubsub_audit_client, ItemTopic
 from src.clients.task_client import get_task_client, TaskClient
-from src.dependencies import Properties
 from src.routes.pubsub_models import PubSubMessage, PubSubProfileV1, IndexerResponse
 from src.routes.pubsub_utils import _unpack_envelope
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pubsub/profiles")
-
-
-@lru_cache()
-def get_properties():
-    return Properties()
 
 
 """
@@ -40,7 +33,7 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 async def handle_pubsub_message(
         request: PubSubMessage,
         task_client: TaskClient = Depends(get_task_client),
-        pubsub_audit_client: PubsubAuditClient = Depends(get_pubsub_audit_client)
+        pubsub_audit_client: PubSubAuditClient = Depends(get_pubsub_audit_client)
 ) -> IndexerResponse:
     """
     Handle a pubsub POST call. We do not use the actual pubsub library, but instead receive the message
@@ -65,7 +58,7 @@ async def handle_pubsub_message(
         successful_messages.append(profile)
 
     if len(successful_messages) > 0:
-        pubsub_audit_client.send_batch(get_properties().pubsub_profiles_audit_topic_name, successful_messages)
+        pubsub_audit_client.send_batch(ItemTopic.PROFILE, successful_messages)
     response.tasks = tasks
 
     return response

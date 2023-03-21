@@ -5,6 +5,7 @@ from fastapi import Depends
 from pydantic import BaseModel
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
+from src.clients.pubsub_audit_client import PubSubAuditClient, get_pubsub_audit_client, ItemTopic
 from src.clients.task_client import get_task_client, TaskClient
 from src.routes.pubsub_models import PubSubUserReviewV1
 
@@ -17,9 +18,10 @@ class UserReviewServiceResponse(BaseModel):
 
 
 class UserReviewService(object):
-    def __init__(self, book_recommender_api_client: BookRecommenderApiClient, task_client: TaskClient):
+    def __init__(self, book_recommender_api_client: BookRecommenderApiClient, task_client: TaskClient, audit_client: PubSubAuditClient):
         self.book_recommender_api_client = book_recommender_api_client
         self.task_client = task_client
+        self.audit_client = audit_client
 
     async def process_pubsub_batch_message(self, pubsub_message: List[PubSubUserReviewV1]) -> UserReviewServiceResponse:
         service_response = UserReviewServiceResponse()
@@ -38,6 +40,7 @@ class UserReviewService(object):
                 batch_user_reviews = [review.dict() for review in remaining_reviews_to_index]
                 create_response = await self.book_recommender_api_client.create_batch_user_reviews(
                     batch_user_reviews)
+                self.audit_client.send_batch(ItemTopic.USER_REVIEW, batch_user_reviews)
                 service_response.indexed += create_response.indexed
                 # We intentionally allow 5xx and uncaught exceptions to bubble up to the caller
             else:
@@ -72,6 +75,7 @@ class UserReviewService(object):
 
 def get_user_review_service(
         book_recommender_api_client: BookRecommenderApiClient = Depends(get_book_recommender_api_client),
-        task_client: TaskClient = Depends(get_task_client)
+        task_client: TaskClient = Depends(get_task_client),
+        pubsub_audit_client: PubSubAuditClient = Depends(get_pubsub_audit_client)
 ) -> UserReviewService:
-    return UserReviewService(book_recommender_api_client, task_client)
+    return UserReviewService(book_recommender_api_client, task_client, pubsub_audit_client)

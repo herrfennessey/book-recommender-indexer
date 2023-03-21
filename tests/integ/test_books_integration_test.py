@@ -8,6 +8,7 @@ from assertpy import assert_that
 from fastapi.testclient import TestClient
 from google.pubsub_v1 import SubscriberClient
 
+from src.clients.pubsub_audit_client import ItemTopic
 from src.dependencies import Properties
 from tests.integ.integ_utils import _base_64_encode
 
@@ -128,6 +129,24 @@ def test_successful_book_write(httpx_mock, test_client: TestClient, caplog: LogC
     assert_that(caplog.text).contains("Successfully wrote book: 4")
     assert_that(response.json().get("indexed")).is_equal_to(1)
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(1)
+
+
+def test_audit_message_looks_exactly_like_input_model(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
+                                                      subscriber_client: SubscriberClient):
+    # Given
+    _put_call_is_successful(httpx_mock)
+    book = _a_random_book_dict()
+    payload = json.dumps({"items": [book]})
+
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _base_64_encode(payload)
+
+    # When
+    test_client.post("/pubsub/books/handle", json=message)
+
+    # Then
+    audit_message = _consume_messages(subscriber_client).received_messages[0]
+    assert_that(audit_message.message.data.decode("utf-8")).is_equal_to(json.dumps(book))
 
 
 def test_invalid_item_in_batch_doesnt_prevent_other_writes(httpx_mock,
@@ -262,7 +281,7 @@ def _a_random_book_dict():
 
 
 def _get_topic_path():
-    return f"projects/{properties.gcp_project_name}/topics/{properties.pubsub_book_audit_topic_name}"
+    return f"projects/{properties.gcp_project_name}/topics/{ItemTopic.BOOK}"
 
 
 def _get_subscription_path():

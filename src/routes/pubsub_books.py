@@ -1,5 +1,4 @@
 import logging
-from functools import lru_cache
 
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
@@ -8,16 +7,9 @@ from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
     BookRecommenderApiClientException, BookRecommenderApiServerException
-from src.clients.pubsub_audit_client import get_pubsub_audit_client, PubsubAuditClient
-from src.dependencies import Properties
+from src.clients.pubsub_audit_client import get_pubsub_audit_client, PubSubAuditClient, ItemTopic
 from src.routes.pubsub_models import PubSubMessage, IndexerResponse, PubSubBookV1
 from src.routes.pubsub_utils import _unpack_envelope
-
-
-@lru_cache()
-def get_properties():
-    return Properties()
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pubsub/books")
@@ -43,7 +35,7 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 async def handle_pubsub_message(
         request: PubSubMessage,
         client: BookRecommenderApiClient = Depends(get_book_recommender_api_client),
-        pubsub_audit_client: PubsubAuditClient = Depends(get_pubsub_audit_client)
+        pubsub_audit_client: PubSubAuditClient = Depends(get_pubsub_audit_client)
 ):
     """
     Handle a pubsub POST call. We do not use the actual pubsub library, but instead receive the message
@@ -74,7 +66,7 @@ async def handle_pubsub_message(
         return Response(status_code=HTTP_500_INTERNAL_SERVER_ERROR)
 
     if len(successful_books) > 0:
-        pubsub_audit_client.send_batch(get_properties().pubsub_book_audit_topic_name, successful_books)
+        pubsub_audit_client.send_batch(ItemTopic.BOOK, successful_books)
 
     # We need to return 200 to pubsub, otherwise it will retry
     return IndexerResponse(indexed=indexed)

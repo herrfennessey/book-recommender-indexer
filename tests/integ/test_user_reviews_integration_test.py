@@ -9,16 +9,21 @@ from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
 from fastapi.testclient import TestClient
 from google.cloud.tasks_v2 import CloudTasksClient
+from google.pubsub_v1 import SubscriberClient
 
 from src.clients.book_recommender_api_client import BookRecommenderApiServerException
+from src.dependencies import Properties
 from src.main import app
 from src.services.user_review_service import get_user_review_service
 from tests.integ.integ_utils import _base_64_encode
 
 file_root_path = Path(os.path.dirname(__file__))
 
+properties = Properties()
+
 USER_ID = 1
 BOOK_ID = 2
+SUBSCRIBER_NAME = "test-subscriber"
 
 
 @pytest.fixture
@@ -27,13 +32,32 @@ def non_mocked_hosts() -> list:
     return ["testserver"]
 
 
+@pytest.fixture(autouse=True)
+def test_setup(publisher_client, subscriber_client):
+    publisher_client.create_topic(request={"name": _get_topic_path()})
+    subscriber_client.create_subscription(request={"name": _get_subscription_path(), "topic": _get_topic_path()})
+    yield
+    subscriber_client.delete_subscription(request={"subscription": _get_subscription_path()})
+    publisher_client.delete_topic(request={"topic": _get_topic_path()})
+
+
+def _consume_messages(client: SubscriberClient):
+    response = client.pull(
+        request={"subscription": _get_subscription_path(), "max_messages": 100}, timeout=2)
+    ack_ids = [received_message.ack_id for received_message in response.received_messages]
+    if len(ack_ids) > 0:
+        client.acknowledge(request={"subscription": _get_subscription_path(), "ack_ids": ack_ids})
+    return response
+
+
 def test_handle_endpoint_doesnt_allow_gets(test_client: TestClient):
     response = test_client.get("/pubsub/user-reviews/handle")
     assert_that(response.status_code).is_equal_to(405)
 
 
 def test_well_formed_request_but_not_a_valid_user_review_batch_returns_200(test_client: TestClient,
-                                                                           caplog: LogCaptureFixture):
+                                                                           caplog: LogCaptureFixture,
+                                                                           subscriber_client: SubscriberClient):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_user_reviews")
     payload = json.dumps({"items": [{"garbage": "123"}]})
@@ -46,10 +70,11 @@ def test_well_formed_request_but_not_a_valid_user_review_batch_returns_200(test_
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(caplog.text).contains("Error converting item into PubSubUserReviewV1 object")
+    assert_that(_consume_messages(subscriber_client).received_messages).is_empty()
 
 
 def test_multiple_review_multiple_book_creation(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                cloud_tasks: CloudTasksClient):
+                                                cloud_tasks: CloudTasksClient, subscriber_client: SubscriberClient):
     # Given
     num_reviews = 5
     _user_has_read_no_books(httpx_mock)
@@ -69,11 +94,13 @@ def test_multiple_review_multiple_book_creation(httpx_mock, test_client: TestCli
     assert_that(caplog.text).contains(f"Successfully indexed {num_reviews} user reviews")
     assert_that(response.json().get("indexed")).is_equal_to(num_reviews)
     assert_that(response.json().get("tasks")).is_length(num_reviews)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(num_reviews)
 
 
 def test_indexer_correctly_takes_into_account_existing_items(httpx_mock, test_client: TestClient,
                                                              caplog: LogCaptureFixture,
-                                                             cloud_tasks: CloudTasksClient):
+                                                             cloud_tasks: CloudTasksClient,
+                                                             subscriber_client: SubscriberClient):
     # Given
     total_num_reviews = 5
     expected_num_reviews_indexed = 2
@@ -95,11 +122,13 @@ def test_indexer_correctly_takes_into_account_existing_items(httpx_mock, test_cl
     assert_that(caplog.text).contains(f"Successfully indexed {expected_num_reviews_indexed} user reviews")
     assert_that(response.json().get("indexed")).is_equal_to(expected_num_reviews_indexed)
     assert_that(response.json().get("tasks")).is_length(expected_num_books_enqueued)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(expected_num_reviews_indexed)
 
 
 def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_client: TestClient,
                                                            caplog: LogCaptureFixture,
-                                                           cloud_tasks: CloudTasksClient):
+                                                           cloud_tasks: CloudTasksClient,
+                                                           subscriber_client: SubscriberClient):
     # Given
     _user_has_read_no_books(httpx_mock, user_id=1)
     _user_has_read_books(httpx_mock, book_ids=[1, 2, 3, 4, 5], user_id=2)
@@ -126,11 +155,13 @@ def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_clie
     assert_that(response.json().get("indexed")).is_equal_to(2)
     # And the number of tasks should be the number of books that need to be enqueued, regardless of who enqueued them
     assert_that(response.json().get("tasks")).is_length(2)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(2)
 
 
 def test_duplicate_books_correctly_only_create_one_task(httpx_mock, test_client: TestClient,
-                                                           caplog: LogCaptureFixture,
-                                                           cloud_tasks: CloudTasksClient):
+                                                        caplog: LogCaptureFixture,
+                                                        cloud_tasks: CloudTasksClient,
+                                                        subscriber_client: SubscriberClient):
     # Given
     _user_has_read_no_books(httpx_mock, user_id=1)
     _user_has_read_no_books(httpx_mock, user_id=2)
@@ -158,10 +189,11 @@ def test_duplicate_books_correctly_only_create_one_task(httpx_mock, test_client:
     # And the number of tasks should be the number of books that need to be enqueued, regardless of who enqueued them
     assert_that(response.json().get("tasks")).is_length(2)
     assert_that(response.json().get("tasks")).contains("duplicate")
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(2)
 
 
 def test_user_review_doesnt_exist_book_exists(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                              cloud_tasks):
+                                              cloud_tasks, subscriber_client: SubscriberClient):
     # Given
     _user_has_read_no_books(httpx_mock)
     _user_review_batch_create_successful(httpx_mock)
@@ -179,10 +211,31 @@ def test_user_review_doesnt_exist_book_exists(httpx_mock, test_client: TestClien
     assert_that(caplog.text).contains(f"Successfully indexed {1} user reviews")
     assert_that(response.json().get("indexed")).is_equal_to(1)
     assert_that(response.json().get("tasks")).is_length(0)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(1)
+
+
+def test_audit_message_looks_exactly_like_input_model(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
+                                                      cloud_tasks, subscriber_client: SubscriberClient):
+    # Given
+    _user_has_read_no_books(httpx_mock)
+    _user_review_batch_create_successful(httpx_mock)
+    _book_doesnt_exist(httpx_mock)
+    review = _a_random_user_review()
+    payload = json.dumps({"items": [review]})
+
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _base_64_encode(payload)
+
+    # When
+    test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    audit_message = _consume_messages(subscriber_client).received_messages[0]
+    assert_that(audit_message.message.data.decode("utf-8")).is_equal_to(json.dumps(review))
 
 
 def test_user_review_exists_book_doesnt_exist(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                              cloud_tasks):
+                                              cloud_tasks, subscriber_client: SubscriberClient):
     # Given
     _user_has_read_books(httpx_mock)
     _book_doesnt_exist(httpx_mock)
@@ -198,9 +251,11 @@ def test_user_review_exists_book_doesnt_exist(httpx_mock, test_client: TestClien
     assert_that(response.status_code).is_equal_to(200)
     assert_that(response.json().get("indexed")).is_equal_to(0)
     assert_that(response.json().get("tasks")).is_length(1)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(0)
 
 
-def test_user_review_exists_book_exists(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture, cloud_tasks):
+def test_user_review_exists_book_exists(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture, cloud_tasks,
+                                        subscriber_client: SubscriberClient):
     # Given
     _user_has_read_books(httpx_mock)
     _book_exists_in_db(httpx_mock)
@@ -216,10 +271,11 @@ def test_user_review_exists_book_exists(httpx_mock, test_client: TestClient, cap
     assert_that(response.status_code).is_equal_to(200)
     assert_that(response.json().get("indexed")).is_equal_to(0)
     assert_that(response.json().get("tasks")).is_length(0)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(0)
 
 
 def test_user_review_doesnt_exist_book_doesnt_exist(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                    cloud_tasks: CloudTasksClient):
+                                                    cloud_tasks: CloudTasksClient, subscriber_client: SubscriberClient):
     # Given
     _user_has_read_no_books(httpx_mock)
     _user_review_batch_create_successful(httpx_mock)
@@ -236,6 +292,7 @@ def test_user_review_doesnt_exist_book_doesnt_exist(httpx_mock, test_client: Tes
     assert_that(response.status_code).is_equal_to(200)
     assert_that(response.json().get("indexed")).is_equal_to(1)
     assert_that(response.json().get("tasks")).is_length(1)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(1)
 
 
 def test_user_review_doesnt_exist_and_we_get_429_response(httpx_mock, test_client: TestClient,
@@ -373,3 +430,11 @@ def _a_random_user_review(user_id: int = USER_ID, book_id: int = BOOK_ID):
         "date_read": "2017-09-29T00:00:00",
         "scrape_time": datetime.now().isoformat(),
     }
+
+
+def _get_topic_path():
+    return f"projects/{properties.gcp_project_name}/topics/{properties.pubsub_book_audit_topic_name}"
+
+
+def _get_subscription_path():
+    return f"projects/{properties.gcp_project_name}/subscriptions/{SUBSCRIBER_NAME}"

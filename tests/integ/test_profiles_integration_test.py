@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from google.cloud.tasks_v2 import CloudTasksClient
 from google.pubsub_v1 import SubscriberClient
 
+from src.clients.pubsub_audit_client import ItemTopic
 from src.dependencies import Properties
 from tests.integ.integ_utils import _base_64_encode
 
@@ -80,7 +81,7 @@ def test_well_formed_request_but_not_a_valid_profile_returns_200(test_client: Te
 
 
 def test_task_queue_creates_valid_pubsub_message(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                cloud_tasks: CloudTasksClient, subscriber_client: SubscriberClient):
+                                                 cloud_tasks: CloudTasksClient, subscriber_client: SubscriberClient):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
     profile = _a_random_profile_item()
@@ -158,7 +159,7 @@ def _a_random_profile_item():
 
 
 def _get_topic_path():
-    return f"projects/{properties.gcp_project_name}/topics/{properties.pubsub_profiles_audit_topic_name}"
+    return f"projects/{properties.gcp_project_name}/topics/{ItemTopic.PROFILE}"
 
 
 def _get_subscription_path():
