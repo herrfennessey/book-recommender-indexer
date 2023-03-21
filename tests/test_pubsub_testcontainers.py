@@ -2,6 +2,7 @@ import pytest
 from assertpy import assert_that
 from google.pubsub_v1 import SubscriberClient
 
+from src.clients.pubsub_audit_client import ItemTopic
 from src.dependencies import Properties
 
 properties = Properties()
@@ -33,7 +34,7 @@ def test_pubsub_testcontainers_works(publisher_client, subscriber_client):
 
 
 def _get_topic_path():
-    return f"projects/{properties.gcp_project_name}/topics/{properties.pubsub_profiles_audit_topic_name}"
+    return f"projects/{properties.gcp_project_name}/topics/{ItemTopic.PROFILE}"
 
 
 def _get_subscription_path():
