@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from pydantic import BaseModel, validator
 
@@ -65,13 +65,21 @@ class ApiBookExistsBatchRequest(BaseModel):
     book_ids: List[int]
 
 
+class ApiBookPopularityRequest(BaseModel):
+    book_ids: List[int]
+
+
 class ApiBookExistsBatchResponse(BaseModel):
     book_ids: List[int]
 
 
+class ApiBookPopularityResponse(BaseModel):
+    book_info: Dict[str, int]
+
+
 class ApiUserReviewBatchResponse(BaseModel):
-    indexed: int
+    indexed: int = 0
 
 
 class UserReviewBatchResponse(BaseModel):
-    indexed: int
+    indexed: int = 0

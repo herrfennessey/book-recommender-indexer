@@ -18,8 +18,7 @@ TEST_PROPERTIES = Properties(book_recommender_api_base_url="https://testurl", en
 @pytest.fixture
 def book_recommender_api_client():
     return BookRecommenderApiClient(properties=TEST_PROPERTIES,
-                                    user_read_books_cache=TTLCache(maxsize=100, ttl=60),
-                                    book_exists_cache=LRUCache(maxsize=100))
+                                    user_read_books_cache=TTLCache(maxsize=100, ttl=60))
 
 
 @pytest.mark.asyncio

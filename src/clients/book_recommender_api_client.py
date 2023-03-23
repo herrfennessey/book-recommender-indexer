@@ -9,8 +9,8 @@ from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 
 from src.clients.api_models import BookV1ApiRequest, UserReviewV1BatchRequest, UserReviewBatchResponse, \
     ApiUserReviewBatchResponse, ApiBookExistsBatchResponse, \
-    ApiBookExistsBatchRequest
-from src.clients.utils.cache_utils import get_user_read_book_cache, get_book_exists_cache
+    ApiBookExistsBatchRequest, ApiBookPopularityRequest, ApiBookPopularityResponse
+from src.clients.utils.cache_utils import get_user_read_book_cache
 from src.dependencies import Properties
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,6 @@ class BookRecommenderApiClient(object):
     def __init__(self, properties, user_read_books_cache: TTLCache, book_exists_cache: LRUCache):
         self.base_url = properties.book_recommender_api_base_url
         self.user_read_books_cache = user_read_books_cache
-        self.book_exists_cache = book_exists_cache
 
     async def is_ready(self):
         url = f"{self.base_url}/"
@@ -99,50 +98,60 @@ class BookRecommenderApiClient(object):
         except httpx.HTTPError as e:
             raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
-    async def get_already_indexed_books(self, book_ids: List[int]) -> List[int]:
+    async def get_already_indexed_books(self, book_ids: List[int]) -> ApiBookExistsBatchResponse:
         """
         Function which will query book_recommender_api to see if we have that book indexed already
-
-        The cachetools decorator doesn't seem to work with async fastapi stuff, because of how it instantiates fresh
-        every single time, so I just do it in the global memory space
 
         :param book_ids: List of book IDs to check
         :return: List(int) of book_ids that exist from within your input list
         """
         # We can pop all the IDs which already exist from the cache, because that means we have checked them already
-        book_ids_that_exist_already = []
-        book_ids_to_query = []
-        for book_id in book_ids:
-            if not self.book_exists_cache.get(book_id):
-                book_ids_to_query.append(book_id)
-            else:
-                book_ids_that_exist_already.append(book_id)
-
         url = f"{self.base_url}/books/batch/exists"
         try:
-            request = ApiBookExistsBatchRequest(book_ids=book_ids_to_query)
+            request = ApiBookExistsBatchRequest(book_ids=book_ids)
             response = httpx.post(url, json=request.dict())
             if not response.is_error:
                 # Find ones which don't exist in our cache, but are already indexed
-                book_ids_exist_in_api = ApiBookExistsBatchResponse(**response.json()).book_ids
-                # Add the new entries to the cache
-                for book_id in book_ids_exist_in_api:
-                    self.book_exists_cache[book_id] = True
-
-                book_ids_that_exist_already.extend(book_ids_exist_in_api)
-                return book_ids_that_exist_already
-
+                return ApiBookExistsBatchResponse(**response.json())
             elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
                 logger.error("Received 429 response code from server. URL: {} ".format(url))
             elif response.is_server_error:
                 logger.error(
                     "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,
-                                                                                                   book_ids_to_query))
+                                                                                                   book_ids))
                 raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for book_ids: {}".format(response.text, book_ids_to_query))
+                    "5xx Exception encountered {} for book_ids: {}".format(response.text, book_ids))
         except httpx.HTTPError as e:
             logger.error(
-                "HTTP Error received {} on URL: {} book_ids: {}".format(e, url, book_ids_to_query))
+                "HTTP Error received {} on URL: {} book_ids: {}".format(e, url, book_ids))
+            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
+
+    async def get_book_popularity(self, book_ids: List[int]) -> ApiBookPopularityResponse:
+        """
+        Function which will query book_recommender_api to see if we have that book indexed already
+
+        :param book_ids: List of book IDs to check
+        :return: List(int) of book_ids that exist from within your input list
+        """
+        # We can pop all the IDs which already exist from the cache, because that means we have checked them already
+        url = f"{self.base_url}/books/batch/exists"
+        try:
+            request = ApiBookPopularityRequest(book_ids=book_ids)
+            response = httpx.post(url, json=request.dict())
+            if not response.is_error:
+                # Find ones which don't exist in our cache, but are already indexed
+                return ApiBookPopularityResponse(**response.json())
+            elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
+                logger.error("Received 429 response code from server. URL: {} ".format(url))
+            elif response.is_server_error:
+                logger.error(
+                    "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,
+                                                                                                   book_ids))
+                raise BookRecommenderApiServerException(
+                    "5xx Exception encountered {} for book_ids: {}".format(response.text, book_ids))
+        except httpx.HTTPError as e:
+            logger.error(
+                "HTTP Error received {} on URL: {} book_ids: {}".format(e, url, book_ids))
             raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
     async def create_batch_user_reviews(self, user_review_batch: List[Dict[str, Any]]) -> UserReviewBatchResponse:
@@ -178,6 +187,5 @@ class BookRecommenderApiServerException(Exception):
 
 
 def get_book_recommender_api_client(properties: Properties = Depends(get_properties),
-                                    user_read_book_cache: TTLCache = Depends(get_user_read_book_cache),
-                                    book_exists_cache: LRUCache = Depends(get_book_exists_cache)):
-    return BookRecommenderApiClient(properties, user_read_book_cache, book_exists_cache)
+                                    user_read_book_cache: TTLCache = Depends(get_user_read_book_cache)):
+    return BookRecommenderApiClient(properties, user_read_book_cache)
