@@ -3,6 +3,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, List
 
 import pytest
 from _pytest.logging import LogCaptureFixture
@@ -14,6 +15,7 @@ from google.pubsub_v1 import SubscriberClient
 from src.clients.book_recommender_api_client import BookRecommenderApiServerException
 from src.dependencies import Properties
 from src.main import app
+from src.services.book_task_enqueuer_service import BOOK_POPULARITY_THRESHOLD
 from src.services.user_review_service import get_user_review_service
 from tests.integ.integ_utils import _base_64_encode
 
@@ -24,6 +26,7 @@ properties = Properties()
 USER_ID = 1
 BOOK_ID = 2
 SUBSCRIBER_NAME = "test-subscriber"
+PARENT_QUEUE = f"projects/{properties.gcp_project_name}/locations/{properties.cloud_task_region}/queues/{properties.task_queue_name}"
 
 
 @pytest.fixture
@@ -33,7 +36,7 @@ def non_mocked_hosts() -> list:
 
 
 @pytest.fixture(autouse=True)
-def test_setup(publisher_client, subscriber_client):
+def test_setup(publisher_client, subscriber_client, cloud_tasks):
     publisher_client.create_topic(request={"name": _get_topic_path()})
     subscriber_client.create_subscription(request={"name": _get_subscription_path(), "topic": _get_topic_path()})
     yield
@@ -79,6 +82,7 @@ def test_multiple_review_multiple_book_creation(httpx_mock, test_client: TestCli
     num_reviews = 5
     _user_has_read_no_books(httpx_mock)
     _user_review_batch_create_successful(httpx_mock, 5)
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock, [0, 1, 2, 3, 4])
     _book_doesnt_exist(httpx_mock)
 
     reviews = [_a_random_user_review(book_id=i) for i in range(num_reviews)]
@@ -106,7 +110,37 @@ def test_indexer_correctly_takes_into_account_existing_items(httpx_mock, test_cl
     expected_num_reviews_indexed = 2
     expected_num_books_enqueued = 3
     _user_has_read_books(httpx_mock, [0, 1, 2])
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock, [0, 1, 2, 3, 4])
     _book_exists_in_db(httpx_mock, [3, 4])
+    _user_review_batch_create_successful(httpx_mock, expected_num_reviews_indexed)
+
+    reviews = [_a_random_user_review(book_id=i) for i in range(total_num_reviews)]
+    payload = json.dumps({"items": reviews})
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _base_64_encode(payload)
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(caplog.text).contains(f"Successfully indexed {expected_num_reviews_indexed} user reviews")
+    assert_that(response.json().get("indexed")).is_equal_to(expected_num_reviews_indexed)
+    assert_that(response.json().get("tasks")).is_length(expected_num_books_enqueued)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(expected_num_reviews_indexed)
+
+
+def test_popularity_filtering_correctly_blocks_some_books_indexing(httpx_mock, test_client: TestClient,
+                                                                   caplog: LogCaptureFixture,
+                                                                   cloud_tasks: CloudTasksClient,
+                                                                   subscriber_client: SubscriberClient):
+    # Given
+    total_num_reviews = 5
+    expected_num_reviews_indexed = 5
+    expected_num_books_enqueued = 3
+    _user_has_read_no_books(httpx_mock)
+    _book_exists_in_db(httpx_mock, [])
+    _book_popularity_returns_payload(httpx_mock, {"0": 5, "1": 5, "2": 5, "3": 0, "4": 0})
     _user_review_batch_create_successful(httpx_mock, expected_num_reviews_indexed)
 
     reviews = [_a_random_user_review(book_id=i) for i in range(total_num_reviews)]
@@ -133,6 +167,7 @@ def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_clie
     _user_has_read_no_books(httpx_mock, user_id=1)
     _user_has_read_books(httpx_mock, book_ids=[1, 2, 3, 4, 5], user_id=2)
     _user_review_batch_create_successful(httpx_mock, 1)  # A bit sloppy, but both are going to create one item
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock, [1, 2, 3, 4, 5])
     _book_exists_in_db(httpx_mock, book_ids=[1, 2, 3])
 
     reviews = [_a_random_user_review(user_id=1, book_id=1),  # Unread by user 1
@@ -154,7 +189,7 @@ def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_clie
     # But their index count should be aggregated together
     assert_that(response.json().get("indexed")).is_equal_to(2)
     # And the number of tasks should be the number of books that need to be enqueued, regardless of who enqueued them
-    assert_that(response.json().get("tasks")).is_length(2)
+    assert_that(response.json().get("tasks")).is_length(1)
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(2)
 
 
@@ -167,7 +202,8 @@ def test_duplicate_books_correctly_only_create_one_task(httpx_mock, test_client:
     _user_has_read_no_books(httpx_mock, user_id=2)
 
     _user_review_batch_create_successful(httpx_mock, 1)  # A bit sloppy, but both are going to create one item
-    _book_exists_in_db(httpx_mock, book_ids=[])
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock, [1])
+    _book_doesnt_exist(httpx_mock)
 
     reviews = [_a_random_user_review(user_id=1, book_id=1),  # Unread by user 1
                _a_random_user_review(user_id=2, book_id=1)]  # Unread by user 1
@@ -187,9 +223,38 @@ def test_duplicate_books_correctly_only_create_one_task(httpx_mock, test_client:
     # But their index count should be aggregated together
     assert_that(response.json().get("indexed")).is_equal_to(2)
     # And the number of tasks should be the number of books that need to be enqueued, regardless of who enqueued them
-    assert_that(response.json().get("tasks")).is_length(2)
-    assert_that(response.json().get("tasks")).contains("duplicate")
+    assert_that(response.json().get("tasks")).is_length(1)
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(2)
+
+
+def test_book_queue_task_will_not_duplicate_preexisting_task(httpx_mock, test_client: TestClient,
+                                                             caplog: LogCaptureFixture,
+                                                             cloud_tasks: CloudTasksClient,
+                                                             subscriber_client: SubscriberClient):
+    # Given
+    print(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE)))
+    cloud_tasks.create_task(parent=PARENT_QUEUE,
+                            task=_a_task_for_book_scrape(BOOK_ID))  # task already exists for book 1
+
+    _user_has_read_no_books(httpx_mock, user_id=USER_ID)
+    _user_review_batch_create_successful(httpx_mock, 1)  # A bit sloppy, but both are going to create one item
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock)
+    _book_doesnt_exist(httpx_mock)
+
+    reviews = [_a_random_user_review(user_id=USER_ID, book_id=BOOK_ID)]
+
+    payload = json.dumps({"items": reviews})
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _base_64_encode(payload)
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(response.json().get("indexed")).is_equal_to(1)
+    assert_that(response.json().get("tasks")).is_equal_to(["duplicate"])
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(1)
 
 
 def test_user_review_doesnt_exist_book_exists(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
@@ -197,6 +262,7 @@ def test_user_review_doesnt_exist_book_exists(httpx_mock, test_client: TestClien
     # Given
     _user_has_read_no_books(httpx_mock)
     _user_review_batch_create_successful(httpx_mock)
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock)
     _book_exists_in_db(httpx_mock)
 
     payload = json.dumps({"items": [_a_random_user_review()]})
@@ -219,6 +285,7 @@ def test_audit_message_looks_exactly_like_input_model(httpx_mock, test_client: T
     # Given
     _user_has_read_no_books(httpx_mock)
     _user_review_batch_create_successful(httpx_mock)
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock)
     _book_doesnt_exist(httpx_mock)
     review = _a_random_user_review()
     payload = json.dumps({"items": [review]})
@@ -238,6 +305,7 @@ def test_user_review_exists_book_doesnt_exist(httpx_mock, test_client: TestClien
                                               cloud_tasks, subscriber_client: SubscriberClient):
     # Given
     _user_has_read_books(httpx_mock)
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock)
     _book_doesnt_exist(httpx_mock)
     payload = json.dumps({"items": [_a_random_user_review()]})
 
@@ -258,6 +326,7 @@ def test_user_review_exists_book_exists(httpx_mock, test_client: TestClient, cap
                                         subscriber_client: SubscriberClient):
     # Given
     _user_has_read_books(httpx_mock)
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock)
     _book_exists_in_db(httpx_mock)
     payload = json.dumps({"items": [_a_random_user_review()]})
 
@@ -279,6 +348,7 @@ def test_user_review_doesnt_exist_book_doesnt_exist(httpx_mock, test_client: Tes
     # Given
     _user_has_read_no_books(httpx_mock)
     _user_review_batch_create_successful(httpx_mock)
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock)
     _book_doesnt_exist(httpx_mock)
     payload = json.dumps({"items": [_a_random_user_review()]})
 
@@ -330,13 +400,14 @@ def test_user_review_doesnt_exist_put_receives_server_error_propagates_exception
         assert_that(response.status_code).is_equal_to(500)
 
 
-def test_book_existence_check_throwing_500_propagates_error_upward(httpx_mock,
-                                                                   test_client: TestClient,
-                                                                   caplog: LogCaptureFixture,
-                                                                   cloud_tasks: CloudTasksClient):
+def test_book_existence_check_throwing_500_suppresses_exception(httpx_mock,
+                                                                test_client: TestClient,
+                                                                caplog: LogCaptureFixture,
+                                                                cloud_tasks: CloudTasksClient):
     # Given
     _user_has_read_no_books(httpx_mock)
     _user_review_batch_create_successful(httpx_mock)
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock)
     _book_existence_check_throws_server_error(httpx_mock)
 
     payload = json.dumps({"items": [_a_random_user_review()]})
@@ -344,9 +415,11 @@ def test_book_existence_check_throwing_500_propagates_error_upward(httpx_mock,
     message["message"]["data"] = _base_64_encode(payload)
 
     # When
-    with pytest.raises(BookRecommenderApiServerException):
-        response = test_client.post("/pubsub/user-reviews/handle", json=message)
-        assert_that(response.status_code).is_equal_to(500)
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(caplog.text).contains("Error enqueuing book tasks", "book_ids: [2]")
+    assert_that(response.status_code).is_equal_to(200)
 
 
 def test_user_review_existence_check_throwing_500_propagates_error_upward(httpx_mock,
@@ -355,15 +428,26 @@ def test_user_review_existence_check_throwing_500_propagates_error_upward(httpx_
                                                                           cloud_tasks: CloudTasksClient):
     # Given
     _user_review_existence_check_throws_server_error(httpx_mock)
-
     payload = json.dumps({"items": [_a_random_user_review()]})
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _base_64_encode(payload)
 
-    # When
+    # When / Then
     with pytest.raises(BookRecommenderApiServerException):
         response = test_client.post("/pubsub/user-reviews/handle", json=message)
-        assert response.status_code == 500
+        assert_that(response.status_code).is_equal_to(500)
+        assert_that(caplog.text).contains("5xx Exception encountered", "user_id: 1")
+
+
+def _books_referenced_by_enough_reviewers_to_index(httpx_mock, book_ids: List[int] = [BOOK_ID]):
+    response_info = {str(book_id): BOOK_POPULARITY_THRESHOLD for book_id in book_ids}
+    httpx_mock.add_response(json={"book_info": response_info}, status_code=200,
+                            url=f"http://localhost:9000/users/batch/book-popularity")
+
+
+def _book_popularity_returns_payload(httpx_mock, book_to_popularity_dict: Dict[str, int]):
+    httpx_mock.add_response(json={"book_info": book_to_popularity_dict}, status_code=200,
+                            url=f"http://localhost:9000/users/batch/book-popularity")
 
 
 def _user_has_read_books(httpx_mock, book_ids=[BOOK_ID], user_id=USER_ID):
@@ -410,6 +494,13 @@ def _user_review_batch_create_gets_server_error(httpx_mock):
 
 def _stub_user_review_service(user_review_service):
     app.dependency_overrides[get_user_review_service] = lambda: user_review_service
+
+
+def _a_task_for_book_scrape(book_id):
+    return {
+        "name": f"{PARENT_QUEUE}/tasks/book-{book_id}",
+        "http_request": {"url": "http://localhost:12000/foo/bar/baz", "body": b"asdf"}
+    }
 
 
 def _an_example_pubsub_post_call():
