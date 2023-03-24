@@ -10,14 +10,6 @@ from src.dependencies import Properties
 default_properties = Properties()
 PARENT_QUEUE = f"projects/{default_properties.gcp_project_name}/locations/{default_properties.cloud_task_region}/queues/{default_properties.task_queue_name}"
 
-
-@pytest.fixture(autouse=True)
-def test_setup(cloud_tasks):
-    for task in cloud_tasks.list_tasks(request={"parent": PARENT_QUEUE}):
-        cloud_tasks.delete_task(request={"name": task.name})
-    yield
-
-
 def test_task_client_ready_validates_our_queues_exist(cloud_tasks: CloudTasksClient):
     # Given
     task_client = TaskClient(cloud_tasks, default_properties)
@@ -54,11 +46,6 @@ def test_task_queue_successfully_deduplicates_user_tasks(cloud_tasks: CloudTasks
     assert_that(task_name_2).is_equal_to("duplicate")
     assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_length(1)
 
-    cloud_tasks.delete_task(request={"name": task_name})
-    time.sleep(1)
-    assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_empty()
-
-
 def test_task_queue_successfully_deduplicates_book_tasks(cloud_tasks: CloudTasksClient):
     # Given
     task_client = TaskClient(cloud_tasks, default_properties)
@@ -71,8 +58,3 @@ def test_task_queue_successfully_deduplicates_book_tasks(cloud_tasks: CloudTasks
     assert_that(task_name).is_equal_to(f"{PARENT_QUEUE}/tasks/book-12345")
     assert_that(task_name_2).is_equal_to("duplicate")
     assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_length(1)
-
-    cloud_tasks.delete_task(request={"name": task_name})
-    time.sleep(1)
-    assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_empty()
-

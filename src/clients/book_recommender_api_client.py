@@ -22,7 +22,7 @@ def get_properties():
 
 
 class BookRecommenderApiClient(object):
-    def __init__(self, properties, user_read_books_cache: TTLCache, book_exists_cache: LRUCache):
+    def __init__(self, properties, user_read_books_cache: TTLCache):
         self.base_url = properties.book_recommender_api_base_url
         self.user_read_books_cache = user_read_books_cache
 
@@ -134,7 +134,7 @@ class BookRecommenderApiClient(object):
         :return: List(int) of book_ids that exist from within your input list
         """
         # We can pop all the IDs which already exist from the cache, because that means we have checked them already
-        url = f"{self.base_url}/books/batch/exists"
+        url = f"{self.base_url}/users/batch/book-popularity"
         try:
             request = ApiBookPopularityRequest(book_ids=book_ids)
             response = httpx.post(url, json=request.dict())

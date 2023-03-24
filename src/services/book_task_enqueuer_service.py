@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 from fastapi import Depends
+from pydantic import BaseModel
 
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
 from src.clients.task_client import TaskClient, get_task_client
@@ -11,7 +12,7 @@ BOOK_POPULARITY_THRESHOLD = 5
 logger = logging.getLogger(__name__)
 
 
-class BookTaskEnqueuerResponse:
+class BookTaskEnqueuerResponse(BaseModel):
     tasks: List[str] = []
 
 
@@ -24,7 +25,7 @@ class BookTaskEnqueuerService(object):
         # Kick off two async requests simultaneously to get the books already indexed and the book popularity
         # We will use both responses to filter out which tasks we actually want to create
 
-        response = BookTaskEnqueuerResponse()
+        response = BookTaskEnqueuerResponse(tasks=[])
 
         candidates = await self._get_candidates_above_indexing_threshold(book_ids)
         if len(candidates) > 0:
@@ -42,7 +43,7 @@ class BookTaskEnqueuerService(object):
         book_popularity_response = await self.book_recommender_api_client.get_book_popularity(book_ids)
 
         for book_id, user_reviews in book_popularity_response.book_info.items():
-            if user_reviews >= BOOK_POPULARITY_THRESHOLD:
+            if user_reviews >= BOOK_POPULARITY_THRESHOLD and int(book_id) in book_ids:
                 candidates.append(int(book_id))
 
         return candidates

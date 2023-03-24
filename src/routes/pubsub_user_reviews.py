@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from src.routes.pubsub_models import PubSubMessage, PubSubUserReviewV1, IndexerResponse
 from src.routes.pubsub_utils import _unpack_envelope
+from src.services.book_task_enqueuer_service import BookTaskEnqueuerService, get_book_task_enqueuer_service
 from src.services.user_review_service import get_user_review_service, UserReviewService
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,8 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 @router.post("/handle", tags=["user-reviews"], status_code=200)
 async def handle_pubsub_message(
         request: PubSubMessage,
-        user_review_service: UserReviewService = Depends(get_user_review_service)
+        user_review_service: UserReviewService = Depends(get_user_review_service),
+        book_task_enqueuer_service: BookTaskEnqueuerService = Depends(get_book_task_enqueuer_service)
 ):
     """
     Handle a pubsub POST call. We do not use the actual pubsub library, but instead receive the message
@@ -51,9 +53,17 @@ async def handle_pubsub_message(
             logging.error("Error converting item into PubSubUserReviewV1 object. Received: %s Error: %s", batch.items,
                           e)
 
+    indexer_response = IndexerResponse()
     if len(items) > 0:
-        service_response = await user_review_service.process_pubsub_batch_message(items)
-        return IndexerResponse(**service_response.dict())
+        user_review_service_response = await user_review_service.process_pubsub_batch_message(items)
+        indexer_response.indexed = len(user_review_service_response.indexed)
 
-    return IndexerResponse()
+        book_ids_to_enqueue = [item.book_id for item in items]
+        try:
+            book_task_enqueuer_response = await book_task_enqueuer_service.enqueue_books_if_necessary(
+                book_ids_to_enqueue)
+            indexer_response.tasks = book_task_enqueuer_response.tasks
+        except Exception as e:
+            logging.error("Error enqueuing book tasks. Error: %s", e)
 
+    return indexer_response

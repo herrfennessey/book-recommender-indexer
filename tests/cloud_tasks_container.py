@@ -20,7 +20,7 @@ class CloudTasksContainer(DockerContainer):
         self.port = port
         self.with_exposed_ports(self.port)
         self.with_command(
-            f'-host 0.0.0.0 -port {self.port} -queue "projects/test-project/locations/here/queues/test-queue"'
+            f'-host 0.0.0.0 -port {self.port} -queue "projects/test-project/locations/here/queues/test-queue" --hard-reset-on-purge-queue=true'
         )
 
     def get_client(self):

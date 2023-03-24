@@ -24,7 +24,7 @@ class UserReviewService(object):
         self.audit_client = audit_client
 
     async def process_pubsub_batch_message(self, pubsub_message: List[PubSubUserReviewV1]) -> UserReviewServiceResponse:
-        service_response = UserReviewServiceResponse()
+        service_response = UserReviewServiceResponse(indexed=[])
 
         # Partition by user ID - it should already be, but can't be too certain
         user_to_review_batch_dict: Dict[int, List[PubSubUserReviewV1]] = {}
