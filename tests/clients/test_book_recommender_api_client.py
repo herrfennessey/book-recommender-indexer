@@ -8,6 +8,7 @@ from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
 from cachetools import TTLCache, LRUCache
 
+from src.clients.api_models import ApiBookExistsBatchResponse, ApiBookPopularityResponse
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, BookRecommenderApiServerException, \
     BookRecommenderApiClientException
 from src.dependencies import Properties
@@ -201,7 +202,7 @@ async def test_empty_response_to_see_if_book_exists(httpx_mock,
     response = await book_recommender_api_client.get_already_indexed_books([1])
 
     # Then
-    assert_that(response).is_equal_to([])
+    assert_that(response).is_equal_to(ApiBookExistsBatchResponse(book_ids=[]))
 
 
 @pytest.mark.asyncio
@@ -214,36 +215,7 @@ async def test_200_to_see_if_book_exists(httpx_mock,
     response = await book_recommender_api_client.get_already_indexed_books([1])
 
     # Then
-    assert_that(response).is_equal_to([1])
-
-
-@pytest.mark.asyncio
-async def test_cache_prevent_more_than_one_call_to_check_if_book_exists(httpx_mock,
-                                                                        book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-    httpx_mock.add_response(json={"book_ids": [1]}, status_code=200, url="https://testurl/books/batch/exists")
-
-    # When
-    response = await book_recommender_api_client.get_already_indexed_books([1])
-
-    # Then
-    assert_that(response).is_equal_to([1])
-    assert_that(httpx_mock.get_requests()).is_length(1)
-
-
-@pytest.mark.asyncio
-async def test_cache_doesnt_save_on_empty_book_response(httpx_mock,
-                                                   book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="https://testurl/books/batch/exists")
-
-    # When
-    for _ in range(0, 10):
-        response = await book_recommender_api_client.get_already_indexed_books([1])
-
-    # Then
-    assert_that(response).is_equal_to([])
-    assert_that(httpx_mock.get_requests()).is_length(10)
+    assert_that(response).is_equal_to(ApiBookExistsBatchResponse(book_ids=[1]))
 
 
 @pytest.mark.asyncio
@@ -270,6 +242,52 @@ async def test_unhandled_exceptions_when_querying_if_book_exists_throws_exceptio
 
     assert_that(caplog.text).contains("HTTP Error", "Unable to read within timeout", "[1, 2, 3]")
 
+
+@pytest.mark.asyncio
+async def test_200_on_book_popularity_request(httpx_mock, caplog: LogCaptureFixture,
+                                              book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    httpx_mock.add_response(json={"book_info": {"1": 5, "2": 0}}, status_code=200,
+                            url="https://testurl/users/batch/book-popularity")
+
+    # When
+    response = await book_recommender_api_client.get_book_popularity([1, 2])
+
+    # Then
+    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={"1": 5, "2": 0}))
+
+
+@pytest.mark.asyncio
+async def test_5xx_on_book_popularity_request_throws_exception(httpx_mock, caplog: LogCaptureFixture,
+                                                               book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    httpx_mock.add_response(status_code=500, url="https://testurl/users/batch/book-popularity")
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        await book_recommender_api_client.get_book_popularity([1, 2])
+
+
+@pytest.mark.asyncio
+async def test_429_response_code_on_book_popularity_throws_server_exception(httpx_mock, caplog: LogCaptureFixture,
+                                                                            book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    httpx_mock.add_response(status_code=429, url="https://testurl/users/batch/book-popularity")
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        await book_recommender_api_client.get_book_popularity([1, 2])
+
+
+@pytest.mark.asyncio
+async def test_http_exception_on_book_popularity_throws_server_exception(httpx_mock, caplog: LogCaptureFixture,
+                                                                         book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        await book_recommender_api_client.get_book_popularity([1, 2])
 
 @pytest.mark.asyncio
 async def test_successful_user_review_creation(httpx_mock, caplog: LogCaptureFixture,

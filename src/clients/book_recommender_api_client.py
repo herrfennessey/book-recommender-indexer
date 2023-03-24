@@ -143,6 +143,7 @@ class BookRecommenderApiClient(object):
                 return ApiBookPopularityResponse(**response.json())
             elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
                 logger.error("Received 429 response code from server. URL: {} ".format(url))
+                raise BookRecommenderApiServerException("Received HTTP_429_TOO_MANY_REQUESTS from server")
             elif response.is_server_error:
                 logger.error(
                     "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,

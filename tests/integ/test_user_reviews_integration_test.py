@@ -400,10 +400,10 @@ def test_user_review_doesnt_exist_put_receives_server_error_propagates_exception
         assert_that(response.status_code).is_equal_to(500)
 
 
-def test_book_existence_check_throwing_500_propagates_error_upward(httpx_mock,
-                                                                   test_client: TestClient,
-                                                                   caplog: LogCaptureFixture,
-                                                                   cloud_tasks: CloudTasksClient):
+def test_book_existence_check_throwing_500_suppresses_exception(httpx_mock,
+                                                                test_client: TestClient,
+                                                                caplog: LogCaptureFixture,
+                                                                cloud_tasks: CloudTasksClient):
     # Given
     _user_has_read_no_books(httpx_mock)
     _user_review_batch_create_successful(httpx_mock)
@@ -415,9 +415,11 @@ def test_book_existence_check_throwing_500_propagates_error_upward(httpx_mock,
     message["message"]["data"] = _base_64_encode(payload)
 
     # When
-    with pytest.raises(BookRecommenderApiServerException):
-        response = test_client.post("/pubsub/user-reviews/handle", json=message)
-        assert_that(response.status_code).is_equal_to(500)
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(caplog.text).contains("Error enqueuing book tasks", "book_ids: [2]")
+    assert_that(response.status_code).is_equal_to(200)
 
 
 def test_user_review_existence_check_throwing_500_propagates_error_upward(httpx_mock,
@@ -426,17 +428,15 @@ def test_user_review_existence_check_throwing_500_propagates_error_upward(httpx_
                                                                           cloud_tasks: CloudTasksClient):
     # Given
     _user_review_existence_check_throws_server_error(httpx_mock)
-
     payload = json.dumps({"items": [_a_random_user_review()]})
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _base_64_encode(payload)
 
-    # When
-    response = test_client.post("/pubsub/user-reviews/handle", json=message)
-
-    # Then
-    assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Error enqueuing book tasks", "book_ids: [2]")
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        response = test_client.post("/pubsub/user-reviews/handle", json=message)
+        assert_that(response.status_code).is_equal_to(500)
+        assert_that(caplog.text).contains("5xx Exception encountered", "user_id: 1")
 
 
 def _books_referenced_by_enough_reviewers_to_index(httpx_mock, book_ids: List[int] = [BOOK_ID]):
