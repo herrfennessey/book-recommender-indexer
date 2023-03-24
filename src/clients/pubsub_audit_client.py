@@ -65,9 +65,9 @@ class PubSubAuditClient(object):
         def callback(publish_future: pubsub_v1.publisher.futures.Future) -> None:
             try:
                 # Wait 60 seconds for the publish call to succeed.
-                logger.info(publish_future.result(timeout=60))
+                publish_future.result(timeout=60)
             except futures.TimeoutError:
-                logger.info(f"Publishing {data} timed out.")
+                logger.error(f"Publishing {data} timed out.")
 
         return callback
 
