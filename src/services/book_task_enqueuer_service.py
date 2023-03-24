@@ -45,6 +45,8 @@ class BookTaskEnqueuerService(object):
         for book_id, user_reviews in book_popularity_response.book_info.items():
             if user_reviews >= BOOK_POPULARITY_THRESHOLD and int(book_id) in book_ids:
                 candidates.append(int(book_id))
+            else:
+                logging.info("book_id: %s has too few reviews: %s. Skipping!", book_id, user_reviews)
 
         return candidates
 
