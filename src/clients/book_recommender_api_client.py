@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import List, Any, Dict
 
 import httpx
-from cachetools import TTLCache, LRUCache
+from cachetools import TTLCache
 from fastapi import Depends
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 
@@ -133,27 +133,31 @@ class BookRecommenderApiClient(object):
         :param book_ids: List of book IDs to check
         :return: List(int) of book_ids that exist from within your input list
         """
-        # We can pop all the IDs which already exist from the cache, because that means we have checked them already
         url = f"{self.base_url}/users/batch/book-popularity"
-        try:
-            request = ApiBookPopularityRequest(book_ids=book_ids)
-            response = httpx.post(url, json=request.dict())
-            if not response.is_error:
-                # Find ones which don't exist in our cache, but are already indexed
-                return ApiBookPopularityResponse(**response.json())
-            elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
-                logger.error("Received 429 response code from server. URL: {} ".format(url))
-                raise BookRecommenderApiServerException("Received HTTP_429_TOO_MANY_REQUESTS from server")
-            elif response.is_server_error:
+        book_info = dict()
+        for chunk in self._chunk_list(book_ids, 10):
+            request = ApiBookPopularityRequest(book_ids=chunk)
+            try:
+                response = httpx.post(url, json=request.dict(), timeout=10)
+                if not response.is_error:
+                    response = ApiBookPopularityResponse(**response.json())
+                    book_info.update(response.book_info)
+                elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
+                    logger.error("Received 429 response code from server. URL: {} ".format(url))
+                    raise BookRecommenderApiServerException("Received HTTP_429_TOO_MANY_REQUESTS from server")
+                elif response.is_server_error:
+                    logger.error(
+                        "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(response.text,
+                                                                                                       url,
+                                                                                                       book_ids))
+                    raise BookRecommenderApiServerException(
+                        "5xx Exception encountered {} for book_ids: {}".format(response.text, book_ids))
+            except httpx.HTTPError as e:
                 logger.error(
-                    "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,
-                                                                                                   book_ids))
-                raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for book_ids: {}".format(response.text, book_ids))
-        except httpx.HTTPError as e:
-            logger.error(
-                "HTTP Error received {} on URL: {} book_ids: {}".format(e, url, book_ids))
-            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
+                    "HTTP Error received {} on URL: {} book_ids: {}".format(e, url, book_ids))
+                raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
+
+        return ApiBookPopularityResponse(book_info=book_info)
 
     async def create_batch_user_reviews(self, user_review_batch: List[Dict[str, Any]]) -> UserReviewBatchResponse:
         user_review = UserReviewV1BatchRequest(user_reviews=user_review_batch)
@@ -177,6 +181,17 @@ class BookRecommenderApiClient(object):
         except httpx.HTTPError as e:
             raise BookRecommenderApiServerException(
                 "HTTP Exception encountered: {} for URL {}".format(e, url))
+
+    @staticmethod
+    def _chunk_list(incoming_list: List, chunk_size: int) -> List[List]:
+        """
+        Function to chunk a list into a list of lists of size n
+
+        :param incoming_list: List to chunk
+        :param chunk_size: Size of each chunk
+        :return: List of lists
+        """
+        return [incoming_list[i:i + chunk_size] for i in range(0, len(incoming_list), chunk_size)]
 
 
 class BookRecommenderApiClientException(Exception):

@@ -6,7 +6,7 @@ import httpx
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
-from cachetools import TTLCache, LRUCache
+from cachetools import TTLCache
 
 from src.clients.api_models import ApiBookExistsBatchResponse, ApiBookPopularityResponse
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, BookRecommenderApiServerException, \
@@ -258,6 +258,23 @@ async def test_200_on_book_popularity_request(httpx_mock, caplog: LogCaptureFixt
 
 
 @pytest.mark.asyncio
+async def test_that_client_batches_requests_transparently(httpx_mock, caplog: LogCaptureFixture,
+                                                          book_recommender_api_client: BookRecommenderApiClient):
+    # Given
+    for i in range(0, 5):
+        batch_response = {f"{i}": 5 for i in range(i * 10, (i + 1) * 10)}
+        httpx_mock.add_response(json={"book_info": batch_response}, status_code=200,
+                                url="https://testurl/users/batch/book-popularity")
+
+    # When
+    response = await book_recommender_api_client.get_book_popularity([i for i in range(0, 50)])
+
+    # Then
+    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={f"{i}": 5 for i in range(0, 50)}))
+    assert_that(len(httpx_mock.get_requests())).is_equal_to(5)  # 5 batches
+
+
+@pytest.mark.asyncio
 async def test_5xx_on_book_popularity_request_throws_exception(httpx_mock, caplog: LogCaptureFixture,
                                                                book_recommender_api_client: BookRecommenderApiClient):
     # Given
@@ -288,6 +305,7 @@ async def test_http_exception_on_book_popularity_throws_server_exception(httpx_m
     # When / Then
     with pytest.raises(BookRecommenderApiServerException):
         await book_recommender_api_client.get_book_popularity([1, 2])
+
 
 @pytest.mark.asyncio
 async def test_successful_user_review_creation(httpx_mock, caplog: LogCaptureFixture,
