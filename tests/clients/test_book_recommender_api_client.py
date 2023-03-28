@@ -247,8 +247,11 @@ async def test_unhandled_exceptions_when_querying_if_book_exists_throws_exceptio
 async def test_200_on_book_popularity_request(httpx_mock, caplog: LogCaptureFixture,
                                               book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    httpx_mock.add_response(json={"book_info": {"1": 5, "2": 0}}, status_code=200,
-                            url="https://testurl/users/batch/book-popularity")
+
+    httpx_mock.add_response(json={"user_count": 5}, status_code=200,
+                            url="https://testurl/users/book-popularity/1")
+    httpx_mock.add_response(json={"user_count": 0}, status_code=200,
+                            url="https://testurl/users/book-popularity/2")
 
     # When
     response = await book_recommender_api_client.get_book_popularity([1, 2])
@@ -257,43 +260,39 @@ async def test_200_on_book_popularity_request(httpx_mock, caplog: LogCaptureFixt
     assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={"1": 5, "2": 0}))
 
 
+@pytest.mark.parametrize("status_code", [429, 503, 504])
 @pytest.mark.asyncio
-async def test_that_client_batches_requests_transparently(httpx_mock, caplog: LogCaptureFixture,
-                                                          book_recommender_api_client: BookRecommenderApiClient):
+async def test_retryable_exception_doesnt_error_batch_and_doesnt_retry(status_code, httpx_mock,
+                                                                       caplog: LogCaptureFixture,
+                                                                       book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    for i in range(0, 5):
-        batch_response = {f"{i}": 5 for i in range(i * 10, (i + 1) * 10)}
-        httpx_mock.add_response(json={"book_info": batch_response}, status_code=200,
-                                url="https://testurl/users/batch/book-popularity")
+    httpx_mock.add_response(json={"user_count": 5}, status_code=200,
+                            url="https://testurl/users/book-popularity/1")
+    httpx_mock.add_response(status_code=status_code, url="https://testurl/users/book-popularity/2")
 
     # When
-    response = await book_recommender_api_client.get_book_popularity([i for i in range(0, 50)])
+    response = await book_recommender_api_client.get_book_popularity([1, 2])
 
     # Then
-    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={f"{i}": 5 for i in range(0, 50)}))
-    assert_that(len(httpx_mock.get_requests())).is_equal_to(5)  # 5 batches
+    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={"1": 5}))
+    assert_that(len(httpx_mock.get_requests())).is_equal_to(4)  # We currently retry twice, .5 seconds apart
 
 
 @pytest.mark.asyncio
-async def test_5xx_on_book_popularity_request_throws_exception(httpx_mock, caplog: LogCaptureFixture,
-                                                               book_recommender_api_client: BookRecommenderApiClient):
+async def test_non_retryable_exception_doesnt_error_batch_and_retries(httpx_mock, caplog: LogCaptureFixture,
+                                                                      book_recommender_api_client: BookRecommenderApiClient):
     # Given
-    httpx_mock.add_response(status_code=500, url="https://testurl/users/batch/book-popularity")
+    httpx_mock.add_response(json={"user_count": 5}, status_code=200,
+                            url="https://testurl/users/book-popularity/1")
+    httpx_mock.add_response(status_code=500, url="https://testurl/users/book-popularity/2")
 
-    # When / Then
-    with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.get_book_popularity([1, 2])
+    # When
+    response = await book_recommender_api_client.get_book_popularity([1, 2])
 
-
-@pytest.mark.asyncio
-async def test_429_response_code_on_book_popularity_throws_server_exception(httpx_mock, caplog: LogCaptureFixture,
-                                                                            book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-    httpx_mock.add_response(status_code=429, url="https://testurl/users/batch/book-popularity")
-
-    # When / Then
-    with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.get_book_popularity([1, 2])
+    # Then
+    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={"1": 5}))
+    assert_that(caplog.text).contains("Non retryable http status encountered", "500")
+    assert_that(len(httpx_mock.get_requests())).is_equal_to(2)
 
 
 @pytest.mark.asyncio
@@ -302,9 +301,12 @@ async def test_http_exception_on_book_popularity_throws_server_exception(httpx_m
     # Given
     httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
 
-    # When / Then
-    with pytest.raises(BookRecommenderApiServerException):
-        await book_recommender_api_client.get_book_popularity([1, 2])
+    # When
+    response = await book_recommender_api_client.get_book_popularity([1, 2])
+
+    # Then
+    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={}))
+    assert_that(caplog.text).contains("ReadTimeout", "Unable to read within timeout")
 
 
 @pytest.mark.asyncio

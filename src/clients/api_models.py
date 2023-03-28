@@ -73,6 +73,15 @@ class ApiBookExistsBatchResponse(BaseModel):
     book_ids: List[int]
 
 
+class UserBookPopularityResponse(BaseModel):
+    user_count: int
+
+
+class SingleBookPopularityResponse(BaseModel):
+    book_id: int
+    user_count: int
+
+
 class ApiBookPopularityResponse(BaseModel):
     book_info: Dict[str, int]
 
