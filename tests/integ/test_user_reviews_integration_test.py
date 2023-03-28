@@ -198,14 +198,15 @@ def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_clie
                                                            subscriber_client: SubscriberClient):
     # Given
     _user_has_read_no_books(httpx_mock, user_id=1)
-    _user_has_read_books(httpx_mock, book_ids=[1, 2, 3, 4, 5], user_id=2)
+    _user_has_read_books(httpx_mock, book_ids=[1, 2, 3, 4], user_id=2)
     _user_review_batch_create_successful(httpx_mock, 1)  # A bit sloppy, but both are going to create one item
-    _books_referenced_by_enough_reviewers_to_index(httpx_mock, [1, 2, 3, 4, 5])
     _book_exists_in_db(httpx_mock, book_ids=[1, 2, 3])
 
     reviews = [_a_random_user_review(user_id=1, book_id=1),  # Unread by user 1
                _a_random_user_review(user_id=2, book_id=4),  # Read by user 2
-               _a_random_user_review(user_id=2, book_id=6)]  # Unread by user 1
+               _a_random_user_review(user_id=2, book_id=5)]  # Unread by user 2
+    # All books which are referenced by the reviews need to be mocked
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock, [1, 4, 5])
 
     payload = json.dumps({"items": reviews})
     message = _an_example_pubsub_post_call()
@@ -222,7 +223,7 @@ def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_clie
     # But their index count should be aggregated together
     assert_that(response.json().get("indexed")).is_equal_to(2)
     # And the number of tasks should be the number of books that need to be enqueued, regardless of who enqueued them
-    assert_that(response.json().get("tasks")).is_length(1)
+    assert_that(response.json().get("tasks")).is_length(2)
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(2)
 
 
