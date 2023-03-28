@@ -8,7 +8,7 @@ from tests.pubsub_container import PubSubContainer
 @fixture(scope="session", autouse=True)
 def pubsub_container():
     with PubSubContainer() as container:
-        wait_for_logs(container, "Server started, listening", 20)
+        wait_for_logs(container, "Server started, listening", 40)
         yield container
 
 

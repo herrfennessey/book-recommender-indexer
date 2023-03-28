@@ -24,5 +24,5 @@ def run_before_tests(cloud_tasks):
 @fixture(scope="session", autouse=True)
 def cloud_tasks():
     with CloudTasksContainer() as container:
-        wait_for_logs(container, "Creating initial queue", 20)
+        wait_for_logs(container, "Creating initial queue", 40)
         yield container.get_client()

@@ -159,20 +159,54 @@ def test_popularity_filtering_correctly_blocks_some_books_indexing(httpx_mock, t
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(expected_num_reviews_indexed)
 
 
+def test_http_errors_on_popularity_calls_dont_break_entire_request(httpx_mock, test_client: TestClient,
+                                                                   caplog: LogCaptureFixture,
+                                                                   cloud_tasks: CloudTasksClient,
+                                                                   subscriber_client: SubscriberClient):
+    # Given
+    _user_has_read_no_books(httpx_mock)
+    _book_exists_in_db(httpx_mock, [])
+    httpx_mock.add_response(json={"user_count": 5}, status_code=200,
+                            url=f"http://localhost:9000/users/book-popularity/1")  # 1 should get a successful response
+    httpx_mock.add_response(status_code=500,
+                            url="http://localhost:9000/users/book-popularity/2")  # 2 should get a 500 (no retry)
+    httpx_mock.add_response(status_code=503,
+                            url="http://localhost:9000/users/book-popularity/3")  # 3 should first get a retryable error
+    httpx_mock.add_response(json={"user_count": 5}, status_code=200,
+                            url=f"http://localhost:9000/users/book-popularity/3")  # 3 request should succeed second time
+    _user_review_batch_create_successful(httpx_mock, 3)
+
+    reviews = [_a_random_user_review(book_id=i) for i in range(1, 4)]
+    payload = json.dumps({"items": reviews})
+    message = _an_example_pubsub_post_call()
+    message["message"]["data"] = _base_64_encode(payload)
+
+    # When
+    response = test_client.post("/pubsub/user-reviews/handle", json=message)
+
+    # Then
+    assert_that(response.status_code).is_equal_to(200)
+    assert_that(caplog.text).contains(f"Successfully indexed 3 user reviews")
+    assert_that(response.json().get("indexed")).is_equal_to(3)
+    assert_that(_consume_messages(subscriber_client).received_messages).is_length(3)
+    assert_that(response.json().get("tasks")).is_length(2)
+
+
 def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_client: TestClient,
                                                            caplog: LogCaptureFixture,
                                                            cloud_tasks: CloudTasksClient,
                                                            subscriber_client: SubscriberClient):
     # Given
     _user_has_read_no_books(httpx_mock, user_id=1)
-    _user_has_read_books(httpx_mock, book_ids=[1, 2, 3, 4, 5], user_id=2)
+    _user_has_read_books(httpx_mock, book_ids=[1, 2, 3, 4], user_id=2)
     _user_review_batch_create_successful(httpx_mock, 1)  # A bit sloppy, but both are going to create one item
-    _books_referenced_by_enough_reviewers_to_index(httpx_mock, [1, 2, 3, 4, 5])
     _book_exists_in_db(httpx_mock, book_ids=[1, 2, 3])
 
     reviews = [_a_random_user_review(user_id=1, book_id=1),  # Unread by user 1
                _a_random_user_review(user_id=2, book_id=4),  # Read by user 2
-               _a_random_user_review(user_id=2, book_id=6)]  # Unread by user 1
+               _a_random_user_review(user_id=2, book_id=5)]  # Unread by user 2
+    # All books which are referenced by the reviews need to be mocked
+    _books_referenced_by_enough_reviewers_to_index(httpx_mock, [1, 4, 5])
 
     payload = json.dumps({"items": reviews})
     message = _an_example_pubsub_post_call()
@@ -189,7 +223,7 @@ def test_multiple_users_in_one_batch_doesnt_mess_things_up(httpx_mock, test_clie
     # But their index count should be aggregated together
     assert_that(response.json().get("indexed")).is_equal_to(2)
     # And the number of tasks should be the number of books that need to be enqueued, regardless of who enqueued them
-    assert_that(response.json().get("tasks")).is_length(1)
+    assert_that(response.json().get("tasks")).is_length(2)
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(2)
 
 
@@ -440,14 +474,14 @@ def test_user_review_existence_check_throwing_500_propagates_error_upward(httpx_
 
 
 def _books_referenced_by_enough_reviewers_to_index(httpx_mock, book_ids: List[int] = [BOOK_ID]):
-    response_info = {str(book_id): BOOK_POPULARITY_THRESHOLD for book_id in book_ids}
-    httpx_mock.add_response(json={"book_info": response_info}, status_code=200,
-                            url=f"http://localhost:9000/users/batch/book-popularity")
+    for book in book_ids:
+        _book_popularity_returns_payload(httpx_mock, {str(book): BOOK_POPULARITY_THRESHOLD})
 
 
 def _book_popularity_returns_payload(httpx_mock, book_to_popularity_dict: Dict[str, int]):
-    httpx_mock.add_response(json={"book_info": book_to_popularity_dict}, status_code=200,
-                            url=f"http://localhost:9000/users/batch/book-popularity")
+    for book_id, popularity in book_to_popularity_dict.items():
+        httpx_mock.add_response(json={"user_count": popularity}, status_code=200,
+                                url=f"http://localhost:9000/users/book-popularity/{book_id}")
 
 
 def _user_has_read_books(httpx_mock, book_ids=[BOOK_ID], user_id=USER_ID):
