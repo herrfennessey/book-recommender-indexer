@@ -219,17 +219,6 @@ class BookRecommenderApiClient(object):
             raise BookRecommenderApiServerException(
                 "HTTP Exception encountered: {} for URL {}".format(e, url))
 
-    @staticmethod
-    def _chunk_list(incoming_list: List, chunk_size: int) -> List[List]:
-        """
-        Function to chunk a list into a list of lists of size n
-
-        :param incoming_list: List to chunk
-        :param chunk_size: Size of each chunk
-        :return: List of lists
-        """
-        return [incoming_list[i:i + chunk_size] for i in range(0, len(incoming_list), chunk_size)]
-
 
 def get_book_recommender_api_client(properties: Properties = Depends(get_properties),
                                     user_read_book_cache: TTLCache = Depends(get_user_read_book_cache)):
