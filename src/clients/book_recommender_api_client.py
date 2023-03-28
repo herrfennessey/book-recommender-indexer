@@ -14,6 +14,7 @@ from src.clients.api_models import BookV1ApiRequest, UserReviewV1BatchRequest, U
     ApiBookExistsBatchRequest, ApiBookPopularityResponse, UserBookPopularityResponse, SingleBookPopularityResponse
 from src.clients.utils.cache_utils import get_user_read_book_cache
 from src.dependencies import Properties
+from src.services.book_task_enqueuer_service import BOOK_POPULARITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,7 @@ class BookRecommenderApiClient(object):
         :return: Future(ApiBookPopularityResponse) Single book popularity response
         """
         async with httpx.AsyncClient() as client:
-            url = f"{self.base_url}/users/book-popularity/{book_id}"
+            url = f"{self.base_url}/users/book-popularity/{book_id}?limit={BOOK_POPULARITY_THRESHOLD}"
             response = await client.get(url)
             if not response.is_error:
                 response = UserBookPopularityResponse(**response.json())
