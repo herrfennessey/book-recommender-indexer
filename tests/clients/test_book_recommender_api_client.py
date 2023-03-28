@@ -10,7 +10,7 @@ from cachetools import TTLCache
 
 from src.clients.api_models import ApiBookExistsBatchResponse, ApiBookPopularityResponse
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, BookRecommenderApiServerException, \
-    BookRecommenderApiClientException
+    BookRecommenderApiClientException, BOOK_POPULARITY_THRESHOLD
 from src.dependencies import Properties
 
 TEST_PROPERTIES = Properties(book_recommender_api_base_url="https://testurl", env_name="test")
@@ -249,9 +249,9 @@ async def test_200_on_book_popularity_request(httpx_mock, caplog: LogCaptureFixt
     # Given
 
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url="https://testurl/users/book-popularity/1")
+                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
     httpx_mock.add_response(json={"user_count": 0}, status_code=200,
-                            url="https://testurl/users/book-popularity/2")
+                            url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
 
     # When
     response = await book_recommender_api_client.get_book_popularity([1, 2])
@@ -267,8 +267,8 @@ async def test_retryable_exception_doesnt_error_batch_and_doesnt_retry(status_co
                                                                        book_recommender_api_client: BookRecommenderApiClient):
     # Given
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url="https://testurl/users/book-popularity/1")
-    httpx_mock.add_response(status_code=status_code, url="https://testurl/users/book-popularity/2")
+                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
+    httpx_mock.add_response(status_code=status_code, url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
 
     # When
     response = await book_recommender_api_client.get_book_popularity([1, 2])
@@ -283,8 +283,8 @@ async def test_non_retryable_exception_doesnt_error_batch_and_retries(httpx_mock
                                                                       book_recommender_api_client: BookRecommenderApiClient):
     # Given
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url="https://testurl/users/book-popularity/1")
-    httpx_mock.add_response(status_code=500, url="https://testurl/users/book-popularity/2")
+                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
+    httpx_mock.add_response(status_code=500, url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
 
     # When
     response = await book_recommender_api_client.get_book_popularity([1, 2])

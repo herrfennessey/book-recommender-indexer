@@ -4,10 +4,9 @@ from typing import List
 from fastapi import Depends
 from pydantic import BaseModel
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
+from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
+    BOOK_POPULARITY_THRESHOLD
 from src.clients.task_client import TaskClient, get_task_client
-
-BOOK_POPULARITY_THRESHOLD = 5
 
 logger = logging.getLogger(__name__)
 

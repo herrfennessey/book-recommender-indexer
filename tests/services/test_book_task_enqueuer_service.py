@@ -5,8 +5,8 @@ import pytest
 from assertpy import assert_that
 
 from src.clients.api_models import ApiBookPopularityResponse, ApiBookExistsBatchResponse
-from src.clients.book_recommender_api_client import BookRecommenderApiServerException
-from src.services.book_task_enqueuer_service import BookTaskEnqueuerService, BOOK_POPULARITY_THRESHOLD
+from src.clients.book_recommender_api_client import BookRecommenderApiServerException, BOOK_POPULARITY_THRESHOLD
+from src.services.book_task_enqueuer_service import BookTaskEnqueuerService
 
 USER_ID = 1
 BOOK_ID = 2

@@ -14,9 +14,10 @@ from src.clients.api_models import BookV1ApiRequest, UserReviewV1BatchRequest, U
     ApiBookExistsBatchRequest, ApiBookPopularityResponse, UserBookPopularityResponse, SingleBookPopularityResponse
 from src.clients.utils.cache_utils import get_user_read_book_cache
 from src.dependencies import Properties
-from src.services.book_task_enqueuer_service import BOOK_POPULARITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
+
+BOOK_POPULARITY_THRESHOLD = 5
 
 
 @lru_cache()
