@@ -80,7 +80,9 @@ class BookRecommenderApiClientV2(object):
 
         return ApiBookPopularityResponse(book_info=book_info)
 
-    @retry(retry=retry_if_exception_type(RetryableException), stop=stop_after_attempt(3), wait=wait_fixed(.5))
+    @retry(
+        retry=retry_if_exception_type(exception_types=(RetryableException, httpx.ConnectError, httpx.ConnectTimeout)),
+        stop=stop_after_attempt(3), wait=wait_fixed(.5))
     async def _make_book_popularity_request(self, book_id: int) -> SingleBookPopularityResponse:
         """
         Function which will return the future of the book popularity request. This is used to make the request
