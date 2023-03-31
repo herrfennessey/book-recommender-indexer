@@ -8,9 +8,9 @@ from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
 from cachetools import TTLCache
 
-from src.clients.api_models import ApiBookExistsBatchResponse, ApiBookPopularityResponse
+from src.clients.api_models import ApiBookExistsBatchResponse
 from src.clients.book_recommender_api_client import BookRecommenderApiClient, BookRecommenderApiServerException, \
-    BookRecommenderApiClientException, BOOK_POPULARITY_THRESHOLD
+    BookRecommenderApiClientException
 from src.dependencies import Properties
 
 TEST_PROPERTIES = Properties(book_recommender_api_base_url="https://testurl", env_name="test")
@@ -241,72 +241,6 @@ async def test_unhandled_exceptions_when_querying_if_book_exists_throws_exceptio
         await book_recommender_api_client.get_already_indexed_books([1, 2, 3])
 
     assert_that(caplog.text).contains("HTTP Error", "Unable to read within timeout", "[1, 2, 3]")
-
-
-@pytest.mark.asyncio
-async def test_200_on_book_popularity_request(httpx_mock, caplog: LogCaptureFixture,
-                                              book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-
-    httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
-    httpx_mock.add_response(json={"user_count": 0}, status_code=200,
-                            url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
-
-    # When
-    response = await book_recommender_api_client.get_book_popularity([1, 2])
-
-    # Then
-    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={"1": 5, "2": 0}))
-
-
-@pytest.mark.parametrize("status_code", [429, 503, 504])
-@pytest.mark.asyncio
-async def test_retryable_exception_doesnt_error_batch_and_doesnt_retry(status_code, httpx_mock,
-                                                                       caplog: LogCaptureFixture,
-                                                                       book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-    httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
-    httpx_mock.add_response(status_code=status_code, url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
-
-    # When
-    response = await book_recommender_api_client.get_book_popularity([1, 2])
-
-    # Then
-    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={"1": 5}))
-    assert_that(len(httpx_mock.get_requests())).is_equal_to(4)  # We currently retry twice, .5 seconds apart
-
-
-@pytest.mark.asyncio
-async def test_non_retryable_exception_doesnt_error_batch_and_retries(httpx_mock, caplog: LogCaptureFixture,
-                                                                      book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-    httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
-    httpx_mock.add_response(status_code=500, url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
-
-    # When
-    response = await book_recommender_api_client.get_book_popularity([1, 2])
-
-    # Then
-    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={"1": 5}))
-    assert_that(caplog.text).contains("Non retryable http status encountered", "500")
-    assert_that(len(httpx_mock.get_requests())).is_equal_to(2)
-
-
-@pytest.mark.asyncio
-async def test_http_exception_on_book_popularity_throws_server_exception(httpx_mock, caplog: LogCaptureFixture,
-                                                                         book_recommender_api_client: BookRecommenderApiClient):
-    # Given
-    httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
-
-    # When
-    response = await book_recommender_api_client.get_book_popularity([1, 2])
-
-    # Then
-    assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={}))
-    assert_that(caplog.text).contains("ReadTimeout", "Unable to read within timeout")
 
 
 @pytest.mark.asyncio
