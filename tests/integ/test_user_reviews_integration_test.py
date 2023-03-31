@@ -12,7 +12,8 @@ from fastapi.testclient import TestClient
 from google.cloud.tasks_v2 import CloudTasksClient
 from google.pubsub_v1 import SubscriberClient
 
-from src.clients.book_recommender_api_client import BookRecommenderApiServerException, BOOK_POPULARITY_THRESHOLD
+from src.clients.book_recommender_api_client import BookRecommenderApiServerException
+from src.clients.book_recommender_api_client_v2 import BOOK_POPULARITY_THRESHOLD
 from src.dependencies import Properties
 from src.main import app
 from src.services.user_review_service import get_user_review_service
@@ -167,17 +168,17 @@ def test_http_errors_on_popularity_calls_dont_break_entire_request(httpx_mock, t
     _book_exists_in_db(httpx_mock, [])
     # 1 should get a successful response
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"http://localhost:9000/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"http://localhost_v2:9000/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
     # 2 should get a 500 (no retry)
     httpx_mock.add_response(status_code=500,
-                            url=f"http://localhost:9000/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"http://localhost_v2:9000/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
 
     # 3 should first get a retryable error
     httpx_mock.add_response(status_code=503,
-                            url=f"http://localhost:9000/users/book-popularity/3?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"http://localhost_v2:9000/users/book-popularity/3?limit={BOOK_POPULARITY_THRESHOLD}")
     # 3 request should succeed second time
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"http://localhost:9000/users/book-popularity/3?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"http://localhost_v2:9000/users/book-popularity/3?limit={BOOK_POPULARITY_THRESHOLD}")
     _user_review_batch_create_successful(httpx_mock, 3)
 
     reviews = [_a_random_user_review(book_id=i) for i in range(1, 4)]
@@ -485,7 +486,7 @@ def _books_referenced_by_enough_reviewers_to_index(httpx_mock, book_ids: List[in
 def _book_popularity_returns_payload(httpx_mock, book_to_popularity_dict: Dict[str, int]):
     for book_id, popularity in book_to_popularity_dict.items():
         httpx_mock.add_response(json={"user_count": popularity}, status_code=200,
-                                url=f"http://localhost:9000/users/book-popularity/{book_id}?limit={BOOK_POPULARITY_THRESHOLD}")
+                                url=f"http://localhost_v2:9000/users/book-popularity/{book_id}?limit={BOOK_POPULARITY_THRESHOLD}")
 
 
 def _user_has_read_books(httpx_mock, book_ids=[BOOK_ID], user_id=USER_ID):

@@ -4,7 +4,8 @@ from typing import List
 from fastapi import Depends
 from pydantic import BaseModel
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
+from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
+from src.clients.book_recommender_api_client_v2 import BookRecommenderApiClientV2, get_book_recommender_api_client_v2, \
     BOOK_POPULARITY_THRESHOLD
 from src.clients.task_client import TaskClient, get_task_client
 
@@ -16,14 +17,14 @@ class BookTaskEnqueuerResponse(BaseModel):
 
 
 class BookTaskEnqueuerService(object):
-    def __init__(self, book_recommender_api_client: BookRecommenderApiClient, task_client: TaskClient):
+    def __init__(self, book_recommender_api_client: BookRecommenderApiClient,
+                 book_recommender_api_client_v2: BookRecommenderApiClientV2,
+                 task_client: TaskClient):
         self.task_client = task_client
         self.book_recommender_api_client = book_recommender_api_client
+        self.book_recommender_api_client_v2 = book_recommender_api_client_v2
 
     async def enqueue_books_if_necessary(self, book_ids: List[int]) -> BookTaskEnqueuerResponse:
-        # Kick off two async requests simultaneously to get the books already indexed and the book popularity
-        # We will use both responses to filter out which tasks we actually want to create
-
         response = BookTaskEnqueuerResponse(tasks=[])
 
         candidates = await self._get_candidates_above_indexing_threshold(book_ids)
@@ -39,7 +40,7 @@ class BookTaskEnqueuerService(object):
 
     async def _get_candidates_above_indexing_threshold(self, book_ids: List[int]) -> List[int]:
         candidates = []
-        book_popularity_response = await self.book_recommender_api_client.get_book_popularity(book_ids)
+        book_popularity_response = await self.book_recommender_api_client_v2.get_book_popularity(book_ids)
 
         for book_id, user_reviews in book_popularity_response.book_info.items():
             if user_reviews >= BOOK_POPULARITY_THRESHOLD and int(book_id) in book_ids:
@@ -52,5 +53,6 @@ class BookTaskEnqueuerService(object):
 
 def get_book_task_enqueuer_service(
         book_recommender_api_client: BookRecommenderApiClient = Depends(get_book_recommender_api_client),
+        book_recommender_api_client_v2: BookRecommenderApiClientV2 = Depends(get_book_recommender_api_client_v2),
         task_client: TaskClient = Depends(get_task_client)):
-    return BookTaskEnqueuerService(book_recommender_api_client, task_client)
+    return BookTaskEnqueuerService(book_recommender_api_client, book_recommender_api_client_v2, task_client)
