@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from starlette.responses import Response
 from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client, \
+from src.clients.book_recommender_api_client_v2 import BookRecommenderApiClientV2, get_book_recommender_api_client_v2, \
     BookRecommenderApiClientException, BookRecommenderApiServerException
 from src.clients.pubsub_audit_client import get_pubsub_audit_client, PubSubAuditClient, ItemTopic
 from src.routes.pubsub_models import PubSubMessage, IndexerResponse, PubSubBookV1
@@ -34,7 +34,7 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 @router.post("/handle", tags=["books"], status_code=200)
 async def handle_pubsub_message(
         request: PubSubMessage,
-        client: BookRecommenderApiClient = Depends(get_book_recommender_api_client),
+        client: BookRecommenderApiClientV2 = Depends(get_book_recommender_api_client_v2),
         pubsub_audit_client: PubSubAuditClient = Depends(get_pubsub_audit_client)
 ):
     """
