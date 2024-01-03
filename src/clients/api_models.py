@@ -20,6 +20,7 @@ class BookV1ApiRequest(BaseModel):
     rating_histogram: List[int]
 
     # Book Information
+    book_id: int
     book_url: str
     book_title: str
     book_description: Optional[str]
@@ -36,7 +37,7 @@ class BookV1ApiRequest(BaseModel):
     def convert_dates_and_times_to_strings(cls, input_datetime):
         if input_datetime and isinstance(input_datetime, datetime):
             # httpx doesn't like datetime objects in its json serializer
-            return str(input_datetime.isoformat())
+            return str(input_datetime.isoformat("T") + "Z")
         else:
             return str(input_datetime)
 
