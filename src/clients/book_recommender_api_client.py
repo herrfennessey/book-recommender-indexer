@@ -7,7 +7,7 @@ from cachetools import TTLCache
 from fastapi import Depends
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 
-from src.clients.api_models import BookV1ApiRequest, UserReviewV1BatchRequest, UserReviewBatchResponse, \
+from src.clients.api_models import UserReviewV1BatchRequest, UserReviewBatchResponse, \
     ApiUserReviewBatchResponse, ApiBookExistsBatchResponse, \
     ApiBookExistsBatchRequest
 from src.clients.utils.cache_utils import get_user_read_book_cache
@@ -52,30 +52,6 @@ class BookRecommenderApiClient(object):
             logger.error("Could not reach Book Recommender API for readiness check: {}".format(e))
 
         return False
-
-    async def create_book(self, book_dict: Dict[str, Any]):
-        book_id = book_dict.get("book_id")
-        book = BookV1ApiRequest(**book_dict)
-        url = f"{self.base_url}/books/{book_id}"
-        try:
-            response = httpx.put(url, json=book.dict())
-            if not response.is_error:
-                logger.info("Successfully wrote book: {}".format(book_id))
-                return
-            elif response.is_client_error:
-                logger.error(
-                    "Received 4xx exception from server with body: {} URL: {} "
-                    "book_id: {}".format(response.text, url, book_id))
-                raise BookRecommenderApiClientException(
-                    "4xx Exception encountered {} for book_id: {}".format(response.text, book_id))
-            elif response.is_server_error:
-                logger.error(
-                    "Received 5xx exception from server with body: {} URL: {} "
-                    "book_id: {}".format(response.text, url, book_id))
-                raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for book_id: {}".format(response.text, book_id))
-        except httpx.HTTPError as e:
-            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
     async def get_books_read_by_user(self, user_id) -> List[int]:
         """

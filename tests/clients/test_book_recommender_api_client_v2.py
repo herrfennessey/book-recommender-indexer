@@ -1,11 +1,15 @@
+import json
+
 import httpx
 import pytest
 from _pytest.logging import LogCaptureFixture
 from assertpy import assert_that
 
 from src.clients.api_models import ApiBookPopularityResponse
-from src.clients.book_recommender_api_client_v2 import BookRecommenderApiClientV2, BOOK_POPULARITY_THRESHOLD
+from src.clients.book_recommender_api_client_v2 import BookRecommenderApiClientV2, BOOK_POPULARITY_THRESHOLD, \
+    BookRecommenderApiClientException, BookRecommenderApiServerException
 from src.dependencies import Properties
+from tests.clients.test_book_recommender_api_client import _a_random_book
 
 TEST_PROPERTIES = Properties(book_recommender_api_base_url_v2="https://testurl", env_name="test")
 
@@ -81,6 +85,80 @@ async def test_http_exception_on_book_popularity_throws_server_exception(httpx_m
     # Then
     assert_that(response).is_equal_to(ApiBookPopularityResponse(book_info={}))
     assert_that(caplog.text).contains("ReadTimeout", "Unable to read within timeout")
+
+
+@pytest.mark.asyncio
+async def test_successful_book_put(httpx_mock, caplog: LogCaptureFixture,
+                                   book_recommender_api_client_v2: BookRecommenderApiClientV2):
+    # Given
+    caplog.set_level("INFO", logger="book_recommender_api_client")
+    httpx_mock.add_response(json={}, status_code=200, url="https://testurl/books/1")
+
+    # When
+    await book_recommender_api_client_v2.create_book(_a_random_book())
+
+    # Then
+    assert_that(caplog.text).contains("Successfully wrote book: 1")
+
+
+@pytest.mark.parametrize("expected_response_code", [500, 501, 502, 503, 504])
+@pytest.mark.asyncio
+async def test_5xx_custom_exception_on_book_put(expected_response_code, httpx_mock,
+                                                caplog: LogCaptureFixture,
+                                                book_recommender_api_client_v2: BookRecommenderApiClientV2):
+    # Given
+    json_response = {"goofed": "you did"}
+    caplog.set_level("ERROR", logger="book_recommender_api_client")
+    httpx_mock.add_response(json=json_response, status_code=expected_response_code,
+                            url="https://testurl/books/1")
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException):
+        await book_recommender_api_client_v2.create_book(_a_random_book())
+
+    assert_that(caplog.text).contains(
+        "Received 5xx exception from server",
+        json.dumps(json_response),
+        "https://testurl/books/1",
+        "book_id: 1"
+    )
+
+
+@pytest.mark.parametrize("expected_response_code", [400, 401, 402, 403, 404])
+@pytest.mark.asyncio
+async def test_4xx_custom_exception_on_book_put(expected_response_code, httpx_mock,
+                                                caplog: LogCaptureFixture,
+                                                book_recommender_api_client_v2: BookRecommenderApiClientV2):
+    # Given
+    json_response = {"goofed": "you did"}
+    caplog.set_level("ERROR", logger="book_recommender_api_client")
+    httpx_mock.add_response(json=json_response, status_code=expected_response_code,
+                            url="https://testurl/books/1")
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiClientException):
+        await book_recommender_api_client_v2.create_book(_a_random_book())
+
+    assert_that(caplog.text).contains(
+        "Received 4xx exception from server",
+        json.dumps(json_response),
+        "https://testurl/books/1",
+        "book_id: 1"
+    )
+
+
+@pytest.mark.asyncio
+async def test_uncaught_exception_on_put_book(httpx_mock, caplog: LogCaptureFixture,
+                                              book_recommender_api_client_v2: BookRecommenderApiClientV2):
+    # Given
+    caplog.set_level("ERROR", logger="book_recommender_api_client")
+    httpx_mock.add_exception(httpx.ReadTimeout("Unable to read within timeout"))
+
+    # When / Then
+    with pytest.raises(BookRecommenderApiServerException) as e:
+        await book_recommender_api_client_v2.create_book(_a_random_book())
+
+    assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/books/1")
 
 
 @pytest.fixture
