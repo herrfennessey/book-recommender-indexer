@@ -4,7 +4,6 @@ from typing import List
 from fastapi import Depends
 from pydantic import BaseModel
 
-from src.clients.book_recommender_api_client import BookRecommenderApiClient, get_book_recommender_api_client
 from src.clients.book_recommender_api_client_v2 import BookRecommenderApiClientV2, get_book_recommender_api_client_v2, \
     BOOK_POPULARITY_THRESHOLD
 from src.clients.task_client import TaskClient, get_task_client
