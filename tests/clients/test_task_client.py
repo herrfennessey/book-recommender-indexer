@@ -1,6 +1,3 @@
-import time
-
-import pytest
 from assertpy import assert_that
 from google.cloud.tasks_v2 import CloudTasksClient
 

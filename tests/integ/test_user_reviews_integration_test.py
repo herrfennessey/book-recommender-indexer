@@ -168,17 +168,17 @@ def test_http_errors_on_popularity_calls_dont_break_entire_request(httpx_mock, t
     _book_exists_in_db(httpx_mock, [])
     # 1 should get a successful response
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"http://localhost_v2:9000/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"http://localhost_v2:9000/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
     # 2 should get a 500 (no retry)
     httpx_mock.add_response(status_code=500,
-                            url=f"http://localhost_v2:9000/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"http://localhost_v2:9000/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
 
     # 3 should first get a retryable error
     httpx_mock.add_response(status_code=503,
-                            url=f"http://localhost_v2:9000/users/book-popularity/3?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"http://localhost_v2:9000/book-popularity/3?limit={BOOK_POPULARITY_THRESHOLD}")
     # 3 request should succeed second time
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"http://localhost_v2:9000/users/book-popularity/3?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"http://localhost_v2:9000/book-popularity/3?limit={BOOK_POPULARITY_THRESHOLD}")
     _user_review_batch_create_successful(httpx_mock, 3)
 
     reviews = [_a_random_user_review(book_id=i) for i in range(1, 4)]
@@ -486,7 +486,7 @@ def _books_referenced_by_enough_reviewers_to_index(httpx_mock, book_ids: List[in
 def _book_popularity_returns_payload(httpx_mock, book_to_popularity_dict: Dict[str, int]):
     for book_id, popularity in book_to_popularity_dict.items():
         httpx_mock.add_response(json={"user_count": popularity}, status_code=200,
-                                url=f"http://localhost_v2:9000/users/book-popularity/{book_id}?limit={BOOK_POPULARITY_THRESHOLD}")
+                                url=f"http://localhost_v2:9000/book-popularity/{book_id}?limit={BOOK_POPULARITY_THRESHOLD}")
 
 
 def _user_has_read_books(httpx_mock, book_ids=[BOOK_ID], user_id=USER_ID):
@@ -505,17 +505,17 @@ def _user_review_existence_check_throws_server_error(httpx_mock):
 
 def _book_exists_in_db(httpx_mock, book_ids=[BOOK_ID]):
     httpx_mock.add_response(json={"book_ids": book_ids}, status_code=200,
-                            url="http://localhost:9000/books/batch/exists",
+                            url="http://localhost_v2:9000/books/batch/exists",
                             method="POST")
 
 
 def _book_doesnt_exist(httpx_mock):
-    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="http://localhost:9000/books/batch/exists",
+    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="http://localhost_v2:9000/books/batch/exists",
                             method="POST")
 
 
 def _book_existence_check_throws_server_error(httpx_mock):
-    httpx_mock.add_response(status_code=500, url="http://localhost:9000/books/batch/exists", method="POST")
+    httpx_mock.add_response(status_code=500, url="http://localhost_v2:9000/books/batch/exists", method="POST")
 
 
 def _user_review_batch_create_successful(httpx_mock, indexed=1):
