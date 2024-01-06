@@ -25,9 +25,9 @@ async def test_200_on_book_popularity_request(httpx_mock, caplog: LogCaptureFixt
     # Given
 
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"https://testurl/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
     httpx_mock.add_response(json={"user_count": 0}, status_code=200,
-                            url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"https://testurl/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
 
     # When
     response = await book_recommender_api_client_v2.get_book_popularity([1, 2])
@@ -43,9 +43,9 @@ async def test_retryable_exception_doesnt_error_batch_and_doesnt_retry(status_co
                                                                        book_recommender_api_client_v2: BookRecommenderApiClientV2):
     # Given
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"https://testurl/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
     httpx_mock.add_response(status_code=status_code,
-                            url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"https://testurl/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
 
     # When
     response = await book_recommender_api_client_v2.get_book_popularity([1, 2])
@@ -60,9 +60,9 @@ async def test_non_retryable_exception_doesnt_error_batch_and_retries(httpx_mock
                                                                       book_recommender_api_client_v2: BookRecommenderApiClientV2):
     # Given
     httpx_mock.add_response(json={"user_count": 5}, status_code=200,
-                            url=f"https://testurl/users/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"https://testurl/book-popularity/1?limit={BOOK_POPULARITY_THRESHOLD}")
     httpx_mock.add_response(status_code=500,
-                            url=f"https://testurl/users/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
+                            url=f"https://testurl/book-popularity/2?limit={BOOK_POPULARITY_THRESHOLD}")
 
     # When
     response = await book_recommender_api_client_v2.get_book_popularity([1, 2])

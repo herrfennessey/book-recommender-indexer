@@ -145,7 +145,7 @@ class BookRecommenderApiClientV2(object):
         :return: Future(ApiBookPopularityResponse) Single book popularity response
         """
         async with httpx.AsyncClient() as client:
-            url = f"{self.base_url}/users/book-popularity/{book_id}?limit={BOOK_POPULARITY_THRESHOLD}"
+            url = f"{self.base_url}/book-popularity/{book_id}?limit={BOOK_POPULARITY_THRESHOLD}"
             response = await client.get(url)
             if not response.is_error:
                 response = UserBookPopularityResponse(**response.json())
