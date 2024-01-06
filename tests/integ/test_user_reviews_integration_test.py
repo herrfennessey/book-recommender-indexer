@@ -505,17 +505,17 @@ def _user_review_existence_check_throws_server_error(httpx_mock):
 
 def _book_exists_in_db(httpx_mock, book_ids=[BOOK_ID]):
     httpx_mock.add_response(json={"book_ids": book_ids}, status_code=200,
-                            url="http://localhost:9000/books/batch/exists",
+                            url="http://localhost_v2:9000/books/batch/exists",
                             method="POST")
 
 
 def _book_doesnt_exist(httpx_mock):
-    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="http://localhost:9000/books/batch/exists",
+    httpx_mock.add_response(json={"book_ids": []}, status_code=200, url="http://localhost_v2:9000/books/batch/exists",
                             method="POST")
 
 
 def _book_existence_check_throws_server_error(httpx_mock):
-    httpx_mock.add_response(status_code=500, url="http://localhost:9000/books/batch/exists", method="POST")
+    httpx_mock.add_response(status_code=500, url="http://localhost_v2:9000/books/batch/exists", method="POST")
 
 
 def _user_review_batch_create_successful(httpx_mock, indexed=1):

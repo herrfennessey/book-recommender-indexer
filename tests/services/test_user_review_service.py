@@ -17,7 +17,6 @@ BOOK_ID = 2
 def book_recommender_api_client():
     with patch('src.clients.book_recommender_api_client') as mock_book_recommender_api_client:
         mock_book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value=[])
-        mock_book_recommender_api_client.get_already_indexed_books = AsyncMock(return_value=[])
         mock_book_recommender_api_client.create_batch_user_reviews = AsyncMock(
             return_value=UserReviewBatchResponse(indexed=0))
         yield mock_book_recommender_api_client
@@ -35,7 +34,6 @@ async def test_review_exists_book_exists(book_recommender_api_client: BookRecomm
                                          pubsub_audit_client: PubSubAuditClient):
     # Given
     book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value=[BOOK_ID])
-    book_recommender_api_client.get_already_indexed_books = AsyncMock(return_value=[BOOK_ID])
     service = UserReviewService(book_recommender_api_client, pubsub_audit_client)
     reviews_to_index = [_a_pubsub_user_review()]
 
@@ -54,7 +52,6 @@ async def test_one_review_exists_one_book_exists(book_recommender_api_client: Bo
     # Given
     new_book_id = 5
     book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value=[BOOK_ID])
-    book_recommender_api_client.get_already_indexed_books = AsyncMock(return_value=[BOOK_ID])
     book_recommender_api_client.create_batch_user_reviews = AsyncMock(return_value=UserReviewBatchResponse(indexed=1))
     service = UserReviewService(book_recommender_api_client, pubsub_audit_client)
     reviews_to_index = [_a_pubsub_user_review(book_id=BOOK_ID), _a_pubsub_user_review(book_id=new_book_id)]
@@ -73,7 +70,6 @@ async def test_one_review_exists_one_book_exists(book_recommender_api_client: Bo
 async def test_review_doesnt_exist_book_exists(book_recommender_api_client: BookRecommenderApiClient, pubsub_audit_client: PubSubAuditClient):
     # Given
     book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value=[])
-    book_recommender_api_client.get_already_indexed_books = AsyncMock(return_value=[BOOK_ID])
     book_recommender_api_client.create_batch_user_reviews = AsyncMock(return_value=UserReviewBatchResponse(indexed=1))
     service = UserReviewService(book_recommender_api_client, pubsub_audit_client)
     reviews = [_a_pubsub_user_review()]
@@ -92,7 +88,6 @@ async def test_review_doesnt_exist_book_exists(book_recommender_api_client: Book
 async def test_review_exists_book_doesnt_exist(book_recommender_api_client: BookRecommenderApiClient,pubsub_audit_client: PubSubAuditClient):
     # Given
     book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value=[BOOK_ID])
-    book_recommender_api_client.get_already_indexed_books = AsyncMock(return_value=[])
 
     service = UserReviewService(book_recommender_api_client, pubsub_audit_client)
     reviews = [_a_pubsub_user_review()]
@@ -111,7 +106,6 @@ async def test_review_exists_book_doesnt_exist(book_recommender_api_client: Book
 async def test_review_doesnt_exist_book_doesnt_exist(book_recommender_api_client: BookRecommenderApiClient, pubsub_audit_client: PubSubAuditClient):
     # Given
     book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value=[])
-    book_recommender_api_client.get_already_indexed_books = AsyncMock(return_value=[])
     book_recommender_api_client.create_batch_user_reviews = AsyncMock(return_value=UserReviewBatchResponse(indexed=1))
 
     service = UserReviewService(book_recommender_api_client, pubsub_audit_client)
@@ -131,7 +125,6 @@ async def test_review_doesnt_exist_book_doesnt_exist(book_recommender_api_client
 async def test_multiple_books_multiple_reviews_indexed(book_recommender_api_client: BookRecommenderApiClient,pubsub_audit_client: PubSubAuditClient):
     # Given
     book_recommender_api_client.get_books_read_by_user = AsyncMock(return_value=[])
-    book_recommender_api_client.get_already_indexed_books = AsyncMock(return_value=[])
     book_recommender_api_client.create_batch_user_reviews = AsyncMock(return_value=UserReviewBatchResponse(indexed=5))
 
     service = UserReviewService(book_recommender_api_client, pubsub_audit_client)

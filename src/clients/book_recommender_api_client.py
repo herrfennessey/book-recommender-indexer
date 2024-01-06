@@ -142,6 +142,7 @@ class BookRecommenderApiClient(object):
                 "HTTP Error received {} on URL: {} book_ids: {}".format(e, url, book_ids))
             raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
 
+
     async def create_batch_user_reviews(self, user_review_batch: List[Dict[str, Any]]) -> UserReviewBatchResponse:
         user_review = UserReviewV1BatchRequest(user_reviews=user_review_batch)
         url = f"{self.base_url}/users/batch/create"
