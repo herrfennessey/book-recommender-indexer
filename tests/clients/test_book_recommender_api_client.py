@@ -19,7 +19,6 @@ def book_recommender_api_client():
     return BookRecommenderApiClient(properties=TEST_PROPERTIES,
                                     user_read_books_cache=TTLCache(maxsize=100, ttl=60))
 
-
 @pytest.mark.asyncio
 async def test_successful_book_put(httpx_mock, caplog: LogCaptureFixture,
                                    book_recommender_api_client: BookRecommenderApiClient):
@@ -92,8 +91,6 @@ async def test_uncaught_exception_on_put_book(httpx_mock, caplog: LogCaptureFixt
         await book_recommender_api_client.create_book(_a_random_book())
 
     assert_that(e.value.args[0]).contains("Unable to read within timeout", "https://testurl/books/1")
-
-
 
 @pytest.mark.asyncio
 async def test_successful_get_books_read(httpx_mock, caplog: LogCaptureFixture,

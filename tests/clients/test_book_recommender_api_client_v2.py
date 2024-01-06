@@ -151,7 +151,6 @@ async def test_unhandled_exceptions_when_querying_if_book_exists_throws_exceptio
 
     assert_that(caplog.text).contains("HTTP Error", "Unable to read within timeout", "[1, 2, 3]")
 
-
 @pytest.mark.parametrize("expected_response_code", [500, 501, 502, 503, 504])
 @pytest.mark.asyncio
 async def test_5xx_custom_exception_on_book_put(expected_response_code, httpx_mock,

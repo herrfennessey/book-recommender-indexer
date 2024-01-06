@@ -1,10 +1,9 @@
 import asyncio
 import logging
 from functools import lru_cache
-from typing import List
+from typing import List, Dict, Any
 
 import httpx
-from cachetools import TTLCache
 from fastapi import Depends
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS, HTTP_503_SERVICE_UNAVAILABLE, HTTP_504_GATEWAY_TIMEOUT
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, RetryError, wait_fixed

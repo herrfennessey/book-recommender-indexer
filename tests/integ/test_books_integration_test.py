@@ -253,15 +253,15 @@ def test_multiple_valid_books_with_one_5xx_put_fails_entire_batch(httpx_mock, te
 
 
 def _put_call_is_successful(httpx_mock, book_id=4):
-    httpx_mock.add_response(status_code=200, url=f"http://localhost:9000/books/{book_id}", method="PUT")
+    httpx_mock.add_response(status_code=200, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT")
 
 
 def _put_call_receives_4xx(httpx_mock, book_id=4):
-    httpx_mock.add_response(status_code=422, url=f"http://localhost:9000/books/{book_id}", method="PUT")
+    httpx_mock.add_response(status_code=422, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT")
 
 
 def _put_call_receives_5xx(httpx_mock, book_id=4):
-    httpx_mock.add_response(status_code=500, url=f"http://localhost:9000/books/{book_id}", method="PUT")
+    httpx_mock.add_response(status_code=500, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT")
 
 
 def _an_example_pubsub_post_call():
