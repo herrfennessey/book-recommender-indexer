@@ -149,7 +149,7 @@ class TaskClient(object):
 def get_cloud_tasks_client(properties: Properties = Depends(get_properties)):
     if properties.env_name == "local":
         transport = CloudTasksGrpcTransport(
-            channel=grpc.insecure_channel('localhost:8123', options=('grpc.enable_http_proxy', 0)))
+            channel=grpc.insecure_channel('localhost:8123', options=[('grpc.enable_http_proxy', 0)]))
         return CloudTasksClient(transport=transport)
     else:
         return CloudTasksClient()
