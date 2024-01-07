@@ -24,7 +24,7 @@ def test_read_main(test_client: TestClient):
 def test_health_check_with_both_services_healthy(httpx_mock, test_client: TestClient):
     # Given
     properties = Properties()
-    httpx_mock.add_response(url=f"{properties.book_recommender_api_base_url}/", json={"status": "Healthy"},
+    httpx_mock.add_response(url=f"{properties.book_recommender_api_base_url_v2}", json={"status": "Healthy"},
                             status_code=200, method="GET")
     app.dependency_overrides[get_properties] = lambda: properties
 
@@ -40,7 +40,7 @@ def test_health_check_with_both_services_healthy(httpx_mock, test_client: TestCl
 def test_health_check_with_recommendation_api_unhealthy(httpx_mock, test_client: TestClient):
     # Given
     properties = Properties()
-    httpx_mock.add_response(url=f"{properties.book_recommender_api_base_url}/", json={"status": "Healthy"},
+    httpx_mock.add_response(url=f"{properties.book_recommender_api_base_url_v2}", json={"status": "Healthy"},
                             status_code=500, method="GET")
 
     # When
@@ -56,7 +56,7 @@ def test_health_check_with_task_client_unhealthy(httpx_mock, test_client: TestCl
     # Given
     properties = Properties()
     properties.task_queue_name = "boom"
-    httpx_mock.add_response(url=f"{properties.book_recommender_api_base_url}/", json={"status": "Healthy"},
+    httpx_mock.add_response(url=f"{properties.book_recommender_api_base_url_v2}", json={"status": "Healthy"},
                             status_code=200, method="GET")
     app.dependency_overrides[get_properties] = lambda: properties
 
