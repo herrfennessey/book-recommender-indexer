@@ -12,8 +12,7 @@ from fastapi.testclient import TestClient
 from google.cloud.tasks_v2 import CloudTasksClient
 from google.pubsub_v1 import SubscriberClient
 
-from src.clients.book_recommender_api_client import BookRecommenderApiServerException
-from src.clients.book_recommender_api_client_v2 import BOOK_POPULARITY_THRESHOLD
+from src.clients.book_recommender_api_client_v2 import BOOK_POPULARITY_THRESHOLD, BookRecommenderApiServerException
 from src.dependencies import Properties
 from src.main import app
 from src.services.user_review_service import get_user_review_service
@@ -491,16 +490,16 @@ def _book_popularity_returns_payload(httpx_mock, book_to_popularity_dict: Dict[s
 
 def _user_has_read_books(httpx_mock, book_ids=[BOOK_ID], user_id=USER_ID):
     httpx_mock.add_response(json={"book_ids": book_ids}, status_code=200,
-                            url=f"http://localhost:9000/users/{user_id}/book-ids")
+                            url=f"http://localhost_v2:9000/reviews/{user_id}/book-ids")
 
 
 def _user_has_read_no_books(httpx_mock, user_id=USER_ID):
     httpx_mock.add_response(json={"book_ids": []}, status_code=200,
-                            url=f"http://localhost:9000/users/{user_id}/book-ids")
+                            url=f"http://localhost_v2:9000/reviews/{user_id}/book-ids")
 
 
 def _user_review_existence_check_throws_server_error(httpx_mock):
-    httpx_mock.add_response(status_code=500, url="http://localhost:9000/users/1/book-ids")
+    httpx_mock.add_response(status_code=500, url="http://localhost_v2:9000/reviews/1/book-ids")
 
 
 def _book_exists_in_db(httpx_mock, book_ids=[BOOK_ID]):
@@ -519,16 +518,16 @@ def _book_existence_check_throws_server_error(httpx_mock):
 
 
 def _user_review_batch_create_successful(httpx_mock, indexed=1):
-    httpx_mock.add_response(json={"indexed": indexed}, status_code=200, url=f"http://localhost:9000/users/batch/create",
+    httpx_mock.add_response(json={"indexed": indexed}, status_code=200, url=f"http://localhost_v2:9000/reviews/batch/create",
                             method="POST")
 
 
 def _user_review_batch_create_gets_too_many_requests_response(httpx_mock):
-    httpx_mock.add_response(status_code=429, url=f"http://localhost:9000/users/batch/create", method="POST")
+    httpx_mock.add_response(status_code=429, url=f"http://localhost_v2:9000/reviews/batch/create", method="POST")
 
 
 def _user_review_batch_create_gets_server_error(httpx_mock):
-    httpx_mock.add_response(status_code=500, url=f"http://localhost:9000/users/batch/create", method="POST")
+    httpx_mock.add_response(status_code=500, url=f"http://localhost_v2:9000/reviews/batch/create", method="POST")
 
 
 def _stub_user_review_service(user_review_service):
