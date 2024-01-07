@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 
 from pydantic import BaseModel, validator
@@ -37,7 +37,9 @@ class BookV1ApiRequest(BaseModel):
     def convert_dates_and_times_to_strings(cls, input_datetime):
         if input_datetime and isinstance(input_datetime, datetime):
             # httpx doesn't like datetime objects in its json serializer
-            return str(input_datetime.isoformat("T") + "Z")
+            if input_datetime.tzinfo is None or input_datetime.tzinfo.utcoffset(input_datetime) is None:
+                input_datetime = input_datetime.replace(tzinfo=timezone.utc)
+            return input_datetime.isoformat(timespec='microseconds')
         else:
             return str(input_datetime)
 
@@ -53,7 +55,9 @@ class UserReviewV1BatchItem(BaseModel):
     def convert_dates_and_times_to_strings(cls, input_datetime):
         if input_datetime and isinstance(input_datetime, datetime):
             # httpx doesn't like datetime objects in its json serializer
-            return str(input_datetime.isoformat("T") + "Z")
+            if input_datetime.tzinfo is None or input_datetime.tzinfo.utcoffset(input_datetime) is None:
+                input_datetime = input_datetime.replace(tzinfo=timezone.utc)
+            return input_datetime.isoformat(timespec='microseconds')
         else:
             return str(input_datetime)
 
