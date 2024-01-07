@@ -108,6 +108,11 @@ class BookRecommenderApiClientV2(object):
             elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
                 logger.error("Received 429 response code from server. URL: {} ".format(url))
                 raise BookRecommenderApiServerException("Received HTTP_429_TOO_MANY_REQUESTS from server")
+            elif response.is_client_error:
+                logger.error(
+                    "Received 4xx exception from server with body: {} URL: {} ".format(response.text, url))
+                raise BookRecommenderApiClientException(
+                    "4xx Exception encountered {} for URL: {}".format(response.text, url))
             elif response.is_server_error:
                 logger.error(
                     "Received 5xx exception from server with body: {} URL: {}".format(response.text, url))
