@@ -4,18 +4,19 @@ import logging.config
 import uuid
 from os import path
 
-from fastapi import FastAPI, Request, Depends
-from fastapi.exception_handlers import (
-    http_exception_handler,
-)
+from fastapi import Depends, FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.clients.book_recommender_api_client_v2 import get_book_recommender_api_client_v2, BookRecommenderApiClientV2
+from src.clients.book_recommender_api_client_v2 import (
+    BookRecommenderApiClientV2,
+    get_book_recommender_api_client_v2,
+)
 from src.clients.task_client import TaskClient, get_task_client
-from src.routes import pubsub_books, pubsub_user_reviews, pubsub_profiles
+from src.routes import pubsub_books, pubsub_profiles, pubsub_user_reviews
 
 # setup loggers to display more information
 log_file_path = path.join(path.dirname(path.abspath(__file__)), "logging.conf")
@@ -52,8 +53,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @app.get("/health", tags=["healthcheck"])
-async def welcome(task_client: TaskClient = Depends(get_task_client),
-                  book_api_client: BookRecommenderApiClientV2 = Depends(get_book_recommender_api_client_v2)):
+async def health(
+    task_client: TaskClient = Depends(get_task_client),
+    book_api_client: BookRecommenderApiClientV2 = Depends(
+        get_book_recommender_api_client_v2
+    ),
+):
     book_health_status = await book_api_client.is_ready()
     task_client_health_status = task_client.is_ready()
     if book_health_status and task_client_health_status:

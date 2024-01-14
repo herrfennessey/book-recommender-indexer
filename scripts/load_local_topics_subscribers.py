@@ -6,7 +6,7 @@ project_id = "test-project"
 topic_id = "test-topic"
 subscriber_name = "test-topic-sub"
 
-os.environ['PUBSUB_EMULATOR_HOST'] = 'localhost:8700'
+os.environ["PUBSUB_EMULATOR_HOST"] = "localhost:8700"
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(project_id, topic_id)

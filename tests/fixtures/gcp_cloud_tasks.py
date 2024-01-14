@@ -8,8 +8,11 @@ from tests.cloud_tasks_container import CloudTasksContainer
 
 def purge_queues(task_queue: CloudTasksClient) -> None:
     properties = Properties()
-    queue_path = task_queue.queue_path(properties.gcp_project_name, properties.cloud_task_region,
-                                       properties.task_queue_name)
+    queue_path = task_queue.queue_path(
+        properties.gcp_project_name,
+        properties.cloud_task_region,
+        properties.task_queue_name,
+    )
     task_queue.purge_queue(name=queue_path)
 
 

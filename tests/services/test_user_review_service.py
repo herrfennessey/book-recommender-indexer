@@ -1,4 +1,4 @@
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from assertpy import assert_that
@@ -15,25 +15,34 @@ BOOK_ID = 2
 
 @pytest.fixture()
 def book_recommender_api_client_v2():
-    with patch('src.clients.book_recommender_api_client_v2') as mock_book_recommender_api_client_v2:
-        mock_book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(return_value=[])
+    with patch(
+        "src.clients.book_recommender_api_client_v2"
+    ) as mock_book_recommender_api_client_v2:
+        mock_book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(
+            return_value=[]
+        )
         mock_book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(
-            return_value=UserReviewBatchResponse(indexed=0))
+            return_value=UserReviewBatchResponse(indexed=0)
+        )
         yield mock_book_recommender_api_client_v2
 
 
 @pytest.fixture()
 def pubsub_audit_client():
-    with patch('src.clients.pubsub_audit_client') as mock_pubsub_audit_client:
+    with patch("src.clients.pubsub_audit_client") as mock_pubsub_audit_client:
         mock_pubsub_audit_client.send_batch = MagicMock()
         yield mock_pubsub_audit_client
 
 
 @pytest.mark.asyncio
-async def test_review_exists_book_exists(book_recommender_api_client_v2: BookRecommenderApiClientV2,
-                                         pubsub_audit_client: PubSubAuditClient):
+async def test_review_exists_book_exists(
+    book_recommender_api_client_v2: BookRecommenderApiClientV2,
+    pubsub_audit_client: PubSubAuditClient,
+):
     # Given
-    book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(return_value=[BOOK_ID])
+    book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(
+        return_value=[BOOK_ID]
+    )
     service = UserReviewService(book_recommender_api_client_v2, pubsub_audit_client)
     reviews_to_index = [_a_pubsub_user_review()]
 
@@ -48,13 +57,23 @@ async def test_review_exists_book_exists(book_recommender_api_client_v2: BookRec
 
 
 @pytest.mark.asyncio
-async def test_one_review_exists_one_book_exists(book_recommender_api_client_v2: BookRecommenderApiClientV2,pubsub_audit_client: PubSubAuditClient):
+async def test_one_review_exists_one_book_exists(
+    book_recommender_api_client_v2: BookRecommenderApiClientV2,
+    pubsub_audit_client: PubSubAuditClient,
+):
     # Given
     new_book_id = 5
-    book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(return_value=[BOOK_ID])
-    book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(return_value=UserReviewBatchResponse(indexed=1))
+    book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(
+        return_value=[BOOK_ID]
+    )
+    book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(
+        return_value=UserReviewBatchResponse(indexed=1)
+    )
     service = UserReviewService(book_recommender_api_client_v2, pubsub_audit_client)
-    reviews_to_index = [_a_pubsub_user_review(book_id=BOOK_ID), _a_pubsub_user_review(book_id=new_book_id)]
+    reviews_to_index = [
+        _a_pubsub_user_review(book_id=BOOK_ID),
+        _a_pubsub_user_review(book_id=new_book_id),
+    ]
 
     # When
     response = await service.process_pubsub_batch_message(reviews_to_index)
@@ -67,10 +86,15 @@ async def test_one_review_exists_one_book_exists(book_recommender_api_client_v2:
 
 
 @pytest.mark.asyncio
-async def test_review_doesnt_exist_book_exists(book_recommender_api_client_v2: BookRecommenderApiClientV2, pubsub_audit_client: PubSubAuditClient):
+async def test_review_doesnt_exist_book_exists(
+    book_recommender_api_client_v2: BookRecommenderApiClientV2,
+    pubsub_audit_client: PubSubAuditClient,
+):
     # Given
     book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(return_value=[])
-    book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(return_value=UserReviewBatchResponse(indexed=1))
+    book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(
+        return_value=UserReviewBatchResponse(indexed=1)
+    )
     service = UserReviewService(book_recommender_api_client_v2, pubsub_audit_client)
     reviews = [_a_pubsub_user_review()]
 
@@ -85,9 +109,14 @@ async def test_review_doesnt_exist_book_exists(book_recommender_api_client_v2: B
 
 
 @pytest.mark.asyncio
-async def test_review_exists_book_doesnt_exist(book_recommender_api_client_v2: BookRecommenderApiClientV2,pubsub_audit_client: PubSubAuditClient):
+async def test_review_exists_book_doesnt_exist(
+    book_recommender_api_client_v2: BookRecommenderApiClientV2,
+    pubsub_audit_client: PubSubAuditClient,
+):
     # Given
-    book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(return_value=[BOOK_ID])
+    book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(
+        return_value=[BOOK_ID]
+    )
 
     service = UserReviewService(book_recommender_api_client_v2, pubsub_audit_client)
     reviews = [_a_pubsub_user_review()]
@@ -103,10 +132,15 @@ async def test_review_exists_book_doesnt_exist(book_recommender_api_client_v2: B
 
 
 @pytest.mark.asyncio
-async def test_review_doesnt_exist_book_doesnt_exist(book_recommender_api_client_v2: BookRecommenderApiClientV2, pubsub_audit_client: PubSubAuditClient):
+async def test_review_doesnt_exist_book_doesnt_exist(
+    book_recommender_api_client_v2: BookRecommenderApiClientV2,
+    pubsub_audit_client: PubSubAuditClient,
+):
     # Given
     book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(return_value=[])
-    book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(return_value=UserReviewBatchResponse(indexed=1))
+    book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(
+        return_value=UserReviewBatchResponse(indexed=1)
+    )
 
     service = UserReviewService(book_recommender_api_client_v2, pubsub_audit_client)
     reviews = [_a_pubsub_user_review()]
@@ -122,10 +156,15 @@ async def test_review_doesnt_exist_book_doesnt_exist(book_recommender_api_client
 
 
 @pytest.mark.asyncio
-async def test_multiple_books_multiple_reviews_indexed(book_recommender_api_client_v2: BookRecommenderApiClientV2,pubsub_audit_client: PubSubAuditClient):
+async def test_multiple_books_multiple_reviews_indexed(
+    book_recommender_api_client_v2: BookRecommenderApiClientV2,
+    pubsub_audit_client: PubSubAuditClient,
+):
     # Given
     book_recommender_api_client_v2.get_books_read_by_user = AsyncMock(return_value=[])
-    book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(return_value=UserReviewBatchResponse(indexed=5))
+    book_recommender_api_client_v2.create_batch_user_reviews = AsyncMock(
+        return_value=UserReviewBatchResponse(indexed=5)
+    )
 
     service = UserReviewService(book_recommender_api_client_v2, pubsub_audit_client)
     reviews = []
@@ -149,5 +188,5 @@ def _a_pubsub_user_review(user_id: int = USER_ID, book_id: int = BOOK_ID):
         book_id=book_id,
         user_rating=3,
         date_read="2022-01-01",
-        scrape_time="2022-03-12T12:00:00"
+        scrape_time="2022-03-12T12:00:00",
     )

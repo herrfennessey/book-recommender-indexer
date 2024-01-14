@@ -30,18 +30,28 @@ def non_mocked_hosts() -> list:
 @pytest.fixture(autouse=True)
 def test_setup(publisher_client, subscriber_client):
     publisher_client.create_topic(request={"name": _get_topic_path()})
-    subscriber_client.create_subscription(request={"name": _get_subscription_path(), "topic": _get_topic_path()})
+    subscriber_client.create_subscription(
+        request={"name": _get_subscription_path(), "topic": _get_topic_path()}
+    )
     yield
-    subscriber_client.delete_subscription(request={"subscription": _get_subscription_path()})
+    subscriber_client.delete_subscription(
+        request={"subscription": _get_subscription_path()}
+    )
     publisher_client.delete_topic(request={"topic": _get_topic_path()})
 
 
 def _consume_messages(client: SubscriberClient):
     response = client.pull(
-        request={"subscription": _get_subscription_path(), "max_messages": 100}, timeout=2)
-    ack_ids = [received_message.ack_id for received_message in response.received_messages]
+        request={"subscription": _get_subscription_path(), "max_messages": 100},
+        timeout=2,
+    )
+    ack_ids = [
+        received_message.ack_id for received_message in response.received_messages
+    ]
     if len(ack_ids) > 0:
-        client.acknowledge(request={"subscription": _get_subscription_path(), "ack_ids": ack_ids})
+        client.acknowledge(
+            request={"subscription": _get_subscription_path(), "ack_ids": ack_ids}
+        )
     return response
 
 
@@ -61,9 +71,11 @@ def test_handle_endpoint_rejects_malformed_requests(test_client: TestClient):
     assert_that(response.status_code).is_equal_to(422)
 
 
-def test_well_formed_request_but_not_a_valid_profile_returns_200(test_client: TestClient,
-                                                                 caplog: LogCaptureFixture,
-                                                                 subscriber_client: SubscriberClient):
+def test_well_formed_request_but_not_a_valid_profile_returns_200(
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
     profile_batch = json.dumps({"items": [{"not_a_profile": "123"}]})
@@ -76,12 +88,19 @@ def test_well_formed_request_but_not_a_valid_profile_returns_200(test_client: Te
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Error converting item into PubSubProfileV1 object")
+    assert_that(caplog.text).contains(
+        "Error converting item into PubSubProfileV1 object"
+    )
     assert_that(_consume_messages(subscriber_client).received_messages).is_empty()
 
 
-def test_task_queue_creates_valid_pubsub_message(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                 cloud_tasks: CloudTasksClient, subscriber_client: SubscriberClient):
+def test_task_queue_creates_valid_pubsub_message(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    cloud_tasks: CloudTasksClient,
+    subscriber_client: SubscriberClient,
+):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
     profile = _a_random_profile_item()
@@ -99,14 +118,23 @@ def test_task_queue_creates_valid_pubsub_message(httpx_mock, test_client: TestCl
         assert_that(cloud_tasks.get_task(name=task)).is_not_none()
 
     messages = list(_consume_messages(subscriber_client).received_messages)
-    assert_that(messages[0].message.data.decode("utf-8")).is_equal_to(json.dumps(profile))
+    assert_that(messages[0].message.data.decode("utf-8")).is_equal_to(
+        json.dumps(profile)
+    )
 
 
-def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                    cloud_tasks: CloudTasksClient, subscriber_client: SubscriberClient):
+def test_successful_profile_task_enqueues_correctly(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    cloud_tasks: CloudTasksClient,
+    subscriber_client: SubscriberClient,
+):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
-    profile_batch = json.dumps({"items": [_a_random_profile_item() for _ in range(0, 10)]})
+    profile_batch = json.dumps(
+        {"items": [_a_random_profile_item() for _ in range(0, 10)]}
+    )
 
     pub_sub_message = _an_example_pubsub_post_call()
     pub_sub_message["message"]["data"] = _base_64_encode(profile_batch)
@@ -119,11 +147,17 @@ def test_successful_profile_task_enqueues_correctly(httpx_mock, test_client: Tes
     for task in response.json().get("tasks"):
         assert_that(cloud_tasks.get_task(name=task)).is_not_none()
 
-    assert_that(list(_consume_messages(subscriber_client).received_messages)).is_length(10)
+    assert_that(list(_consume_messages(subscriber_client).received_messages)).is_length(
+        10
+    )
 
 
-def test_one_bad_profile_doesnt_spoil_the_batch(test_client: TestClient, caplog: LogCaptureFixture,
-                                                cloud_tasks: CloudTasksClient, subscriber_client: SubscriberClient):
+def test_one_bad_profile_doesnt_spoil_the_batch(
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    cloud_tasks: CloudTasksClient,
+    subscriber_client: SubscriberClient,
+):
     # Given
     caplog.set_level(logging.ERROR, logger="pubsub_profiles")
     message = _an_example_pubsub_post_call()
@@ -139,7 +173,9 @@ def test_one_bad_profile_doesnt_spoil_the_batch(test_client: TestClient, caplog:
     # Then
     assert_that(response.status_code).is_equal_to(200)
     assert_that(response.json().get("tasks")).is_length(10)
-    assert_that(list(_consume_messages(subscriber_client).received_messages)).is_length(10)
+    assert_that(list(_consume_messages(subscriber_client).received_messages)).is_length(
+        10
+    )
 
 
 def _an_example_pubsub_post_call():
@@ -147,8 +183,9 @@ def _an_example_pubsub_post_call():
         "message": {
             "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
             "message_id": "2070443601311540",
-            "publish_time": "2021-02-26T19:13:55.749Z"},
-        "subscription": "projects/myproject/subscriptions/mysubscription"
+            "publish_time": "2021-02-26T19:13:55.749Z",
+        },
+        "subscription": "projects/myproject/subscriptions/mysubscription",
     }
 
 

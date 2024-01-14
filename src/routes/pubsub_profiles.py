@@ -3,9 +3,13 @@ import logging
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 
-from src.clients.pubsub_audit_client import PubSubAuditClient, get_pubsub_audit_client, ItemTopic
-from src.clients.task_client import get_task_client, TaskClient
-from src.routes.pubsub_models import PubSubMessage, PubSubProfileV1, IndexerResponse
+from src.clients.pubsub_audit_client import (
+    ItemTopic,
+    PubSubAuditClient,
+    get_pubsub_audit_client,
+)
+from src.clients.task_client import TaskClient, get_task_client
+from src.routes.pubsub_models import IndexerResponse, PubSubMessage, PubSubProfileV1
 from src.routes.pubsub_utils import _unpack_envelope
 
 logger = logging.getLogger(__name__)
@@ -31,9 +35,9 @@ The message pubsub sends us roughly follows this schema - data is base 64 encode
 
 @router.post("/handle", tags=["profiles"], status_code=200)
 async def handle_pubsub_message(
-        request: PubSubMessage,
-        task_client: TaskClient = Depends(get_task_client),
-        pubsub_audit_client: PubSubAuditClient = Depends(get_pubsub_audit_client)
+    request: PubSubMessage,
+    task_client: TaskClient = Depends(get_task_client),
+    pubsub_audit_client: PubSubAuditClient = Depends(get_pubsub_audit_client),
 ) -> IndexerResponse:
     """
     Handle a pubsub POST call. We do not use the actual pubsub library, but instead receive the message
@@ -50,7 +54,11 @@ async def handle_pubsub_message(
         try:
             serialized_profile = PubSubProfileV1(**profile)
         except ValidationError as e:
-            logging.error("Error converting item into PubSubProfileV1 object. Received: %s Error: %s", profile, e)
+            logging.error(
+                "Error converting item into PubSubProfileV1 object. Received: %s Error: %s",
+                profile,
+                e,
+            )
             continue
         logging.info("Attempting to enqueue profile: %s", serialized_profile.user_id)
         task_name = task_client.enqueue_user_scrape(serialized_profile.user_id)

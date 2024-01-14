@@ -9,7 +9,9 @@ from src.routes.pubsub_utils import _unpack_envelope
 from tests.integ.integ_utils import _base_64_encode
 
 
-def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestClient, caplog: LogCaptureFixture):
+def test_well_formed_request_but_payload_not_json_returns_200(
+    test_client: TestClient, caplog: LogCaptureFixture
+):
     # Given
     message = _an_example_pubsub_post_call()
     pub_sub_message = PubSubMessage(**message)
@@ -21,24 +23,32 @@ def test_well_formed_request_but_payload_not_json_returns_200(test_client: TestC
     assert_that(caplog.text).contains("Payload was not in JSON")
 
 
-def test_handle_endpoint_logs_error_but_suppresses_exception(test_client: TestClient, caplog: LogCaptureFixture):
+def test_handle_endpoint_logs_error_but_suppresses_exception(
+    test_client: TestClient, caplog: LogCaptureFixture
+):
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _invalid_base_64_object()
     pub_sub_message = PubSubMessage(**message)
 
     _unpack_envelope(pub_sub_message)
 
-    assert_that(caplog.text).contains("Uncaught Exception", "Incorrect padding", _invalid_base_64_object())
+    assert_that(caplog.text).contains(
+        "Uncaught Exception", "Incorrect padding", _invalid_base_64_object()
+    )
 
 
-def test_request_which_cant_serialize_to_pubsub_batch(test_client: TestClient, caplog: LogCaptureFixture):
+def test_request_which_cant_serialize_to_pubsub_batch(
+    test_client: TestClient, caplog: LogCaptureFixture
+):
     message = _an_example_pubsub_post_call()
     message["message"]["data"] = _base_64_encode(json.dumps({"what": "is this?"}))
     pub_sub_message = PubSubMessage(**message)
 
     _unpack_envelope(pub_sub_message)
 
-    assert_that(caplog.text).contains("Error converting payload into object", "{'what': 'is this?'}", "field required")
+    assert_that(caplog.text).contains(
+        "Error converting payload into object", "{'what': 'is this?'}", "field required"
+    )
 
 
 def _invalid_base_64_object():
@@ -51,6 +61,7 @@ def _an_example_pubsub_post_call():
         "message": {
             "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
             "message_id": "2070443601311540",
-            "publish_time": "2021-02-26T19:13:55.749Z"},
-        "subscription": "projects/myproject/subscriptions/mysubscription"
+            "publish_time": "2021-02-26T19:13:55.749Z",
+        },
+        "subscription": "projects/myproject/subscriptions/mysubscription",
     }

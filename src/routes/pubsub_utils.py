@@ -17,15 +17,27 @@ def _unpack_envelope(request: PubSubMessage) -> PubSubItemBatch:
     Returns:
         dict: The unpacked envelope into a nice python dict
     """
-    logging.debug("Handling message with ID %s - Publish Time %s - Attributes %s", request.message.message_id,
-                  request.message.publish_time, request.message.attributes)
+    logging.debug(
+        "Handling message with ID %s - Publish Time %s - Attributes %s",
+        request.message.message_id,
+        request.message.publish_time,
+        request.message.attributes,
+    )
     try:
         payload = base64.b64decode(request.message.data).decode("utf-8")
         json_payload = json.loads(payload)
         return PubSubItemBatch(**json_payload)
-    except JSONDecodeError as _:
-        logging.error("Payload was not in JSON - received %s", payload)
+    except JSONDecodeError as f:
+        logging.error("Payload was not in JSON - received %s. Error: %s", payload, f)
     except ValidationError as e:
-        logging.error("Error converting payload into object. Received: %s Error: %s", json_payload, e)
+        logging.error(
+            "Error converting payload into object. Received: %s Error: %s",
+            json_payload,
+            e,
+        )
     except Exception as e:
-        logging.error("Uncaught Exception while handling pubsub message. Exception: %s. Message: %s", e, request.dict())
+        logging.error(
+            "Uncaught Exception while handling pubsub message. Exception: %s. Message: %s",
+            e,
+            request.dict(),
+        )

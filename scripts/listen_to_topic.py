@@ -8,7 +8,7 @@ topic_id = "test-topic"
 subscription_id = "test-topic-sub"
 # Number of seconds the subscriber should listen for messages
 
-os.environ['PUBSUB_EMULATOR_HOST'] = 'localhost:8700'
+os.environ["PUBSUB_EMULATOR_HOST"] = "localhost:8700"
 
 timeout = 60
 

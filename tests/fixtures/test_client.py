@@ -12,7 +12,9 @@ from src.main import app
 @pytest.fixture(scope="session", autouse=True)
 def test_client(cloud_tasks: CloudTasksClient, publisher_client):
     # Clear caches between runs
-    app.dependency_overrides[get_user_read_book_cache] = lambda: TTLCache(maxsize=1000, ttl=60)
+    app.dependency_overrides[get_user_read_book_cache] = lambda: TTLCache(
+        maxsize=1000, ttl=60
+    )
     # Stub the cloud tasks client to use the docker container instead
     app.dependency_overrides[get_cloud_tasks_client] = lambda: cloud_tasks
     app.dependency_overrides[get_pubsub_audit_publisher] = lambda: publisher_client

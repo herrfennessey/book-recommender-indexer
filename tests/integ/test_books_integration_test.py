@@ -28,18 +28,28 @@ def non_mocked_hosts() -> list:
 @pytest.fixture(autouse=True)
 def test_setup(publisher_client, subscriber_client):
     publisher_client.create_topic(request={"name": _get_topic_path()})
-    subscriber_client.create_subscription(request={"name": _get_subscription_path(), "topic": _get_topic_path()})
+    subscriber_client.create_subscription(
+        request={"name": _get_subscription_path(), "topic": _get_topic_path()}
+    )
     yield
-    subscriber_client.delete_subscription(request={"subscription": _get_subscription_path()})
+    subscriber_client.delete_subscription(
+        request={"subscription": _get_subscription_path()}
+    )
     publisher_client.delete_topic(request={"topic": _get_topic_path()})
 
 
 def _consume_messages(client: SubscriberClient):
     response = client.pull(
-        request={"subscription": _get_subscription_path(), "max_messages": 100}, timeout=2)
-    ack_ids = [received_message.ack_id for received_message in response.received_messages]
+        request={"subscription": _get_subscription_path(), "max_messages": 100},
+        timeout=2,
+    )
+    ack_ids = [
+        received_message.ack_id for received_message in response.received_messages
+    ]
     if len(ack_ids) > 0:
-        client.acknowledge(request={"subscription": _get_subscription_path(), "ack_ids": ack_ids})
+        client.acknowledge(
+            request={"subscription": _get_subscription_path(), "ack_ids": ack_ids}
+        )
     return response
 
 
@@ -59,8 +69,12 @@ def test_handle_endpoint_rejects_non_book_objects(test_client: TestClient):
     assert_that(response.status_code).is_equal_to(422)
 
 
-def test_book_recommender_client_error_suppressed(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                  subscriber_client: SubscriberClient):
+def test_book_recommender_client_error_suppressed(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     _put_call_receives_4xx(httpx_mock)
     payload = json.dumps({"items": [_a_random_book_dict()]})
@@ -73,12 +87,18 @@ def test_book_recommender_client_error_suppressed(httpx_mock, test_client: TestC
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("API returned 4xx exception when called with payload")
+    assert_that(caplog.text).contains(
+        "API returned 4xx exception when called with payload"
+    )
     assert_that(_consume_messages(subscriber_client).received_messages).is_empty()
 
 
-def test_book_recommender_server_error_propagates(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                  subscriber_client: SubscriberClient):
+def test_book_recommender_server_error_propagates(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     _put_call_receives_5xx(httpx_mock)
     payload = json.dumps({"items": [_a_random_book_dict()]})
@@ -91,12 +111,17 @@ def test_book_recommender_server_error_propagates(httpx_mock, test_client: TestC
 
     # Then
     assert_that(response.status_code).is_equal_to(500)
-    assert_that(caplog.text).contains("API returned 5xx Exception when called with payload")
+    assert_that(caplog.text).contains(
+        "API returned 5xx Exception when called with payload"
+    )
     assert_that(_consume_messages(subscriber_client).received_messages).is_empty()
 
 
-def test_well_formed_request_but_not_a_valid_book_returns_200(test_client: TestClient, caplog: LogCaptureFixture,
-                                                              subscriber_client: SubscriberClient):
+def test_well_formed_request_but_not_a_valid_book_returns_200(
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     payload = json.dumps({"items": [{"abc": 123}]})
 
@@ -112,8 +137,12 @@ def test_well_formed_request_but_not_a_valid_book_returns_200(test_client: TestC
     assert_that(_consume_messages(subscriber_client).received_messages).is_empty()
 
 
-def test_successful_book_write(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                               subscriber_client: SubscriberClient):
+def test_successful_book_write(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     _put_call_is_successful(httpx_mock)
     payload = json.dumps({"items": [_a_random_book_dict()]})
@@ -131,8 +160,12 @@ def test_successful_book_write(httpx_mock, test_client: TestClient, caplog: LogC
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(1)
 
 
-def test_audit_message_looks_exactly_like_input_model(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                      subscriber_client: SubscriberClient):
+def test_audit_message_looks_exactly_like_input_model(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     _put_call_is_successful(httpx_mock)
     book = _a_random_book_dict()
@@ -146,13 +179,17 @@ def test_audit_message_looks_exactly_like_input_model(httpx_mock, test_client: T
 
     # Then
     audit_message = _consume_messages(subscriber_client).received_messages[0]
-    assert_that(audit_message.message.data.decode("utf-8")).is_equal_to(json.dumps(book))
+    assert_that(audit_message.message.data.decode("utf-8")).is_equal_to(
+        json.dumps(book)
+    )
 
 
-def test_invalid_item_in_batch_doesnt_prevent_other_writes(httpx_mock,
-                                                           test_client: TestClient,
-                                                           caplog: LogCaptureFixture,
-                                                           subscriber_client: SubscriberClient):
+def test_invalid_item_in_batch_doesnt_prevent_other_writes(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     _put_call_is_successful(httpx_mock)
     payload = json.dumps({"items": [_a_random_book_dict(), {"abc": 123}]})
@@ -170,8 +207,12 @@ def test_invalid_item_in_batch_doesnt_prevent_other_writes(httpx_mock,
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(1)
 
 
-def test_multiple_valid_books_with_successful_puts(httpx_mock, test_client: TestClient, caplog: LogCaptureFixture,
-                                                   subscriber_client: SubscriberClient):
+def test_multiple_valid_books_with_successful_puts(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     _put_call_is_successful(httpx_mock, 1)
     _put_call_is_successful(httpx_mock, 2)
@@ -192,15 +233,19 @@ def test_multiple_valid_books_with_successful_puts(httpx_mock, test_client: Test
 
     # Then
     assert_that(response.status_code).is_equal_to(200)
-    assert_that(caplog.text).contains("Successfully wrote book: 1", "Successfully wrote book: 2")
+    assert_that(caplog.text).contains(
+        "Successfully wrote book: 1", "Successfully wrote book: 2"
+    )
     assert_that(response.json().get("indexed")).is_equal_to(2)
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(2)
 
 
-def test_multiple_valid_books_with_one_4xx_put_fails_gracefully(httpx_mock,
-                                                                test_client: TestClient,
-                                                                caplog: LogCaptureFixture,
-                                                                subscriber_client: SubscriberClient):
+def test_multiple_valid_books_with_one_4xx_put_fails_gracefully(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     _put_call_is_successful(httpx_mock, 1)
     _put_call_receives_4xx(httpx_mock, 2)
@@ -226,9 +271,12 @@ def test_multiple_valid_books_with_one_4xx_put_fails_gracefully(httpx_mock,
     assert_that(_consume_messages(subscriber_client).received_messages).is_length(1)
 
 
-def test_multiple_valid_books_with_one_5xx_put_fails_entire_batch(httpx_mock, test_client: TestClient,
-                                                                  caplog: LogCaptureFixture,
-                                                                  subscriber_client: SubscriberClient):
+def test_multiple_valid_books_with_one_5xx_put_fails_entire_batch(
+    httpx_mock,
+    test_client: TestClient,
+    caplog: LogCaptureFixture,
+    subscriber_client: SubscriberClient,
+):
     # Given
     _put_call_is_successful(httpx_mock, 1)
     _put_call_receives_5xx(httpx_mock, 2)
@@ -253,15 +301,21 @@ def test_multiple_valid_books_with_one_5xx_put_fails_entire_batch(httpx_mock, te
 
 
 def _put_call_is_successful(httpx_mock, book_id=4):
-    httpx_mock.add_response(status_code=200, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT")
+    httpx_mock.add_response(
+        status_code=200, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT"
+    )
 
 
 def _put_call_receives_4xx(httpx_mock, book_id=4):
-    httpx_mock.add_response(status_code=422, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT")
+    httpx_mock.add_response(
+        status_code=422, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT"
+    )
 
 
 def _put_call_receives_5xx(httpx_mock, book_id=4):
-    httpx_mock.add_response(status_code=500, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT")
+    httpx_mock.add_response(
+        status_code=500, url=f"http://localhost_v2:9000/books/{book_id}", method="PUT"
+    )
 
 
 def _an_example_pubsub_post_call():
@@ -269,8 +323,9 @@ def _an_example_pubsub_post_call():
         "message": {
             "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
             "message_id": "2070443601311540",
-            "publish_time": "2021-02-26T19:13:55.749Z"},
-        "subscription": "projects/myproject/subscriptions/mysubscription"
+            "publish_time": "2021-02-26T19:13:55.749Z",
+        },
+        "subscription": "projects/myproject/subscriptions/mysubscription",
     }
 
 

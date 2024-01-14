@@ -1,17 +1,35 @@
 import asyncio
 import logging
 from functools import lru_cache
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import httpx
 from cachetools import TTLCache
 from fastapi import Depends
-from starlette.status import HTTP_429_TOO_MANY_REQUESTS, HTTP_503_SERVICE_UNAVAILABLE, HTTP_504_GATEWAY_TIMEOUT
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, RetryError, wait_fixed
+from starlette.status import (
+    HTTP_429_TOO_MANY_REQUESTS,
+    HTTP_503_SERVICE_UNAVAILABLE,
+    HTTP_504_GATEWAY_TIMEOUT,
+)
+from tenacity import (
+    RetryError,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_fixed,
+)
 
-from src.clients.api_models import ApiBookPopularityResponse, UserBookPopularityResponse, SingleBookPopularityResponse, \
-    BookV1ApiRequest, ApiBookExistsBatchResponse, ApiBookExistsBatchRequest, UserReviewBatchResponse, \
-    UserReviewV1BatchRequest, ApiUserReviewBatchResponse
+from src.clients.api_models import (
+    ApiBookExistsBatchRequest,
+    ApiBookExistsBatchResponse,
+    ApiBookPopularityResponse,
+    ApiUserReviewBatchResponse,
+    BookV1ApiRequest,
+    SingleBookPopularityResponse,
+    UserBookPopularityResponse,
+    UserReviewBatchResponse,
+    UserReviewV1BatchRequest,
+)
 from src.clients.utils.cache_utils import get_user_read_book_cache
 from src.dependencies import Properties
 
@@ -53,7 +71,11 @@ class BookRecommenderApiClientV2(object):
             if not response.is_error:
                 return True
         except Exception as e:
-            logger.error("Could not reach Book Recommender API V2 for readiness check: {}".format(e))
+            logger.error(
+                "Could not reach Book Recommender API V2 for readiness check: {}".format(
+                    e
+                )
+            )
 
         return False
 
@@ -68,7 +90,9 @@ class BookRecommenderApiClientV2(object):
         :return: List(int) of book_ids
         """
         if user_id in self.user_read_books_cache:
-            logging.debug("Cache hit! get_books_read_by_user() user_id: {}".format(user_id))
+            logging.debug(
+                "Cache hit! get_books_read_by_user() user_id: {}".format(user_id)
+            )
             return self.user_read_books_cache[user_id]
 
         url = f"{self.base_url}/reviews/{user_id}/book-ids"
@@ -79,22 +103,34 @@ class BookRecommenderApiClientV2(object):
                 self.user_read_books_cache[user_id] = book_ids
                 return book_ids
             elif response.is_client_error:
-                logger.info("Received 4xx exception from server, assuming user_id: {} does not exist. URL: {} ".format(
-                    user_id, url))
+                logger.info(
+                    "Received 4xx exception from server, assuming user_id: {} does not exist. URL: {} ".format(
+                        user_id, url
+                    )
+                )
                 # We still want to cache this empty list, because 4xx is a business valid response (we should index all
                 # the user reviews, because they haven't read any books yet)
                 self.user_read_books_cache[user_id] = []
                 return []
             elif response.is_server_error:
                 logger.error(
-                    "Received 5xx exception from server with body: {} URL: {} user_id: {}".format(response.text, url,
-                                                                                                  user_id))
+                    "Received 5xx exception from server with body: {} URL: {} user_id: {}".format(
+                        response.text, url, user_id
+                    )
+                )
                 raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for user_id: {}".format(response.text, user_id))
+                    "5xx Exception encountered {} for user_id: {}".format(
+                        response.text, user_id
+                    )
+                )
         except httpx.HTTPError as e:
-            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
+            raise BookRecommenderApiServerException(
+                "HTTP Exception encountered: {} for URL {}".format(e, url)
+            )
 
-    async def create_batch_user_reviews(self, user_review_batch: List[Dict[str, Any]]) -> UserReviewBatchResponse:
+    async def create_batch_user_reviews(
+        self, user_review_batch: List[Dict[str, Any]]
+    ) -> UserReviewBatchResponse:
         user_review = UserReviewV1BatchRequest(user_reviews=user_review_batch)
         url = f"{self.base_url}/reviews/batch/create"
         try:
@@ -103,26 +139,47 @@ class BookRecommenderApiClientV2(object):
                 # Probably excessive to deserialize and reserialize the same response, but I really don't like digging
                 # in raw JSON by key
                 api_response = ApiUserReviewBatchResponse(**response.json())
-                logger.info("Successfully indexed {} user reviews".format(api_response.indexed))
+                logger.info(
+                    "Successfully indexed {} user reviews".format(api_response.indexed)
+                )
                 return UserReviewBatchResponse(indexed=api_response.indexed)
             elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
-                logger.error("Received 429 response code from server. URL: {} ".format(url))
-                raise BookRecommenderApiServerException("Received HTTP_429_TOO_MANY_REQUESTS from server")
+                logger.error(
+                    "Received 429 response code from server. URL: {} ".format(url)
+                )
+                raise BookRecommenderApiServerException(
+                    "Received HTTP_429_TOO_MANY_REQUESTS from server"
+                )
             elif response.is_client_error:
                 logger.error(
-                    "Received 4xx exception from server with body: {} URL: {} ".format(response.text, url))
+                    "Received 4xx exception from server with body: {} URL: {} ".format(
+                        response.text, url
+                    )
+                )
                 raise BookRecommenderApiClientException(
-                    "4xx Exception encountered {} for URL: {}".format(response.text, url))
+                    "4xx Exception encountered {} for URL: {}".format(
+                        response.text, url
+                    )
+                )
             elif response.is_server_error:
                 logger.error(
-                    "Received 5xx exception from server with body: {} URL: {}".format(response.text, url))
+                    "Received 5xx exception from server with body: {} URL: {}".format(
+                        response.text, url
+                    )
+                )
                 raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for URL: {}".format(response.text, url))
+                    "5xx Exception encountered {} for URL: {}".format(
+                        response.text, url
+                    )
+                )
         except httpx.HTTPError as e:
             raise BookRecommenderApiServerException(
-                "HTTP Exception encountered: {} for URL {}".format(e, url))
+                "HTTP Exception encountered: {} for URL {}".format(e, url)
+            )
 
-    async def get_book_popularity(self, book_ids: List[int]) -> ApiBookPopularityResponse:
+    async def get_book_popularity(
+        self, book_ids: List[int]
+    ) -> ApiBookPopularityResponse:
         """
         Function which will query book_recommender_api to see the number of users who reference this book ID. We expect
         large batch sizes, so we will use asyncio to make the request complete as fast as possible.
@@ -143,7 +200,11 @@ class BookRecommenderApiClientV2(object):
                 # We either exhausted the retries, or are choosing to not retry
                 continue
             if issubclass(type(result), Exception):
-                logging.warning("Uncaught exception trying to get book popularity: {} {}".format(type(result), result))
+                logging.warning(
+                    "Uncaught exception trying to get book popularity: {} {}".format(
+                        type(result), result
+                    )
+                )
                 continue
             book_info[result.book_id] = result.user_count
 
@@ -161,19 +222,31 @@ class BookRecommenderApiClientV2(object):
             elif response.is_client_error:
                 logger.error(
                     "Received 4xx exception from server with body: {} URL: {} "
-                    "book_id: {}".format(response.text, url, book_id))
+                    "book_id: {}".format(response.text, url, book_id)
+                )
                 raise BookRecommenderApiClientException(
-                    "4xx Exception encountered {} for book_id: {}".format(response.text, book_id))
+                    "4xx Exception encountered {} for book_id: {}".format(
+                        response.text, book_id
+                    )
+                )
             elif response.is_server_error:
                 logger.error(
                     "Received 5xx exception from server with body: {} URL: {} "
-                    "book_id: {}".format(response.text, url, book_id))
+                    "book_id: {}".format(response.text, url, book_id)
+                )
                 raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for book_id: {}".format(response.text, book_id))
+                    "5xx Exception encountered {} for book_id: {}".format(
+                        response.text, book_id
+                    )
+                )
         except httpx.HTTPError as e:
-            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
+            raise BookRecommenderApiServerException(
+                "HTTP Exception encountered: {} for URL {}".format(e, url)
+            )
 
-    async def get_already_indexed_books(self, book_ids: List[int]) -> ApiBookExistsBatchResponse:
+    async def get_already_indexed_books(
+        self, book_ids: List[int]
+    ) -> ApiBookExistsBatchResponse:
         """
         Function which will query book_recommender_api to see if we have that book indexed already
 
@@ -189,22 +262,44 @@ class BookRecommenderApiClientV2(object):
                 # Find ones which don't exist in our cache, but are already indexed
                 return ApiBookExistsBatchResponse(**response.json())
             elif response.status_code == HTTP_429_TOO_MANY_REQUESTS:
-                logger.error("Received 429 response code from server. URL: {} ".format(url))
+                logger.error(
+                    "Received 429 response code from server. URL: {} ".format(url)
+                )
             elif response.is_server_error:
                 logger.error(
-                    "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(response.text, url,
-                                                                                                   book_ids))
+                    "Received 5xx exception from server with body: {} URL: {} book_ids: {}".format(
+                        response.text, url, book_ids
+                    )
+                )
                 raise BookRecommenderApiServerException(
-                    "5xx Exception encountered {} for book_ids: {}".format(response.text, book_ids))
+                    "5xx Exception encountered {} for book_ids: {}".format(
+                        response.text, book_ids
+                    )
+                )
         except httpx.HTTPError as e:
             logger.error(
-                "HTTP Error received {} on URL: {} book_ids: {}".format(e, url, book_ids))
-            raise BookRecommenderApiServerException("HTTP Exception encountered: {} for URL {}".format(e, url))
+                "HTTP Error received {} on URL: {} book_ids: {}".format(
+                    e, url, book_ids
+                )
+            )
+            raise BookRecommenderApiServerException(
+                "HTTP Exception encountered: {} for URL {}".format(e, url)
+            )
 
     @retry(
-        retry=retry_if_exception_type(exception_types=(RetryableException, httpx.ConnectError, httpx.ConnectTimeout)),
-        stop=stop_after_attempt(3), wait=wait_fixed(.5))
-    async def _make_book_popularity_request(self, book_id: int) -> SingleBookPopularityResponse:
+        retry=retry_if_exception_type(
+            exception_types=(
+                RetryableException,
+                httpx.ConnectError,
+                httpx.ConnectTimeout,
+            )
+        ),
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(0.5),
+    )
+    async def _make_book_popularity_request(
+        self, book_id: int
+    ) -> SingleBookPopularityResponse:
         """
         Function which will return the future of the book popularity request. This is used to make the request
         asynchronously, and then we can gather all the results together.
@@ -217,18 +312,32 @@ class BookRecommenderApiClientV2(object):
             response = await client.get(url)
             if not response.is_error:
                 response = UserBookPopularityResponse(**response.json())
-                return SingleBookPopularityResponse(book_id=book_id, user_count=response.user_count)
-            elif response.status_code in [HTTP_504_GATEWAY_TIMEOUT,
-                                          HTTP_503_SERVICE_UNAVAILABLE,
-                                          HTTP_429_TOO_MANY_REQUESTS]:
-                logging.warning("Retryable http status encountered {}, retrying!".format(response.status_code))
+                return SingleBookPopularityResponse(
+                    book_id=book_id, user_count=response.user_count
+                )
+            elif response.status_code in [
+                HTTP_504_GATEWAY_TIMEOUT,
+                HTTP_503_SERVICE_UNAVAILABLE,
+                HTTP_429_TOO_MANY_REQUESTS,
+            ]:
+                logging.warning(
+                    "Retryable http status encountered {}, retrying!".format(
+                        response.status_code
+                    )
+                )
                 raise RetryableException()
             else:
-                logging.warning("Non retryable http status encountered {} "
-                                "when querying for book_id: {} popularity".format(response.status_code, book_id))
+                logging.warning(
+                    "Non retryable http status encountered {} "
+                    "when querying for book_id: {} popularity".format(
+                        response.status_code, book_id
+                    )
+                )
                 raise NonRetryableException()
 
 
-def get_book_recommender_api_client_v2(properties: Properties = Depends(get_properties),
-                                       user_read_book_cache: TTLCache = Depends(get_user_read_book_cache)):
+def get_book_recommender_api_client_v2(
+    properties: Properties = Depends(get_properties),
+    user_read_book_cache: TTLCache = Depends(get_user_read_book_cache),
+):
     return BookRecommenderApiClientV2(properties, user_read_book_cache)
