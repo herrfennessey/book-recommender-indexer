@@ -5,7 +5,11 @@ from src.clients.task_client import TaskClient
 from src.dependencies import Properties
 
 default_properties = Properties()
-PARENT_QUEUE = f"projects/{default_properties.gcp_project_name}/locations/{default_properties.cloud_task_region}/queues/{default_properties.task_queue_name}"
+PARENT_QUEUE = (
+    f"projects/{default_properties.gcp_project_name}/locations/"
+    f"{default_properties.cloud_task_region}/queues/{default_properties.task_queue_name}"
+)
+
 
 def test_task_client_ready_validates_our_queues_exist(cloud_tasks: CloudTasksClient):
     # Given
@@ -42,6 +46,7 @@ def test_task_queue_successfully_deduplicates_user_tasks(cloud_tasks: CloudTasks
     assert_that(task_name).is_equal_to(f"{PARENT_QUEUE}/tasks/user-abc123")
     assert_that(task_name_2).is_equal_to("duplicate")
     assert_that(list(cloud_tasks.list_tasks(parent=PARENT_QUEUE))).is_length(1)
+
 
 def test_task_queue_successfully_deduplicates_book_tasks(cloud_tasks: CloudTasksClient):
     # Given
