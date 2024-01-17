@@ -53,6 +53,6 @@ testcontainers==3.7.1
 tomli==2.0.1
 typing_extensions==4.9.0
 urllib3==1.26.15
-uvicorn==0.25.0
+uvicorn==0.26.0
 websocket-client==1.7.0
 wrapt==1.16.0
