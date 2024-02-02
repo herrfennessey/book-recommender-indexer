@@ -520,5 +520,6 @@ def _a_random_book() -> Dict[str, Any]:
         "book_id": 1,
         "book_title": "A Random Book Title",
         "book_url": "www.bookurl.com",
+        "image_url": "www.imageurl.com",
         "scrape_time": "2022-09-01T00:00:00.000000",
     }

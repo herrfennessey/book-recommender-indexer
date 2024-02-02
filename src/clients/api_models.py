@@ -12,6 +12,7 @@ class BookV1ApiRequest(BaseModel):
     original_title: Optional[str]
     author: str
     author_url: str
+    book_url: str
 
     # Work Statistics
     num_ratings: Optional[int]
