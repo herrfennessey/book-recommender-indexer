@@ -30,6 +30,7 @@ class PubSubBookV1(BaseModel):
     publish_date: Optional[datetime]
     original_title: Optional[str]
     book_url: str
+    image_url: str
 
     author: str
     author_url: str
@@ -42,7 +43,6 @@ class PubSubBookV1(BaseModel):
 
     # Book Information
     book_id: int
-    book_url: str
     book_title: str
     book_description: Optional[str]
     num_pages: Optional[int]

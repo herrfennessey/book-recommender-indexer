@@ -13,6 +13,7 @@ class BookV1ApiRequest(BaseModel):
     author: str
     author_url: str
     book_url: str
+    image_url: str
 
     # Work Statistics
     num_ratings: Optional[int]
@@ -22,7 +23,6 @@ class BookV1ApiRequest(BaseModel):
 
     # Book Information
     book_id: int
-    book_url: str
     book_title: str
     book_description: Optional[str]
     num_pages: Optional[int]
