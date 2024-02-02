@@ -29,6 +29,8 @@ class PubSubBookV1(BaseModel):
     work_id: int
     publish_date: Optional[datetime]
     original_title: Optional[str]
+    book_url: str
+
     author: str
     author_url: str
 
